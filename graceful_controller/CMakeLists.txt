@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.0.2)
 project(graceful_controller)
 
 if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
@@ -31,6 +31,8 @@ catkin_package(
     sensor_msgs
     std_msgs
     tf
+  LIBRARIES
+    graceful_controller
 )
 
 include_directories(

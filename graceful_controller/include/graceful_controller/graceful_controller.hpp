@@ -1,4 +1,5 @@
 /*
+ * Copyright 2020 Michael Ferguson
  * Copyright 2015 Fetch Robotics Inc
  * Author: Michael Ferguson
  *
@@ -16,51 +17,42 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef FETCH_AUTO_DOCK_CONTROLLER_H
-#define FETCH_AUTO_DOCK_CONTROLLER_H
+#ifndef GRACEFUL_CONTROLLER_HPP
+#define GRACEFUL_CONTROLLER_HPP
 
-#include <ros/ros.h>
-#include <tf/transform_listener.h>
-#include <geometry_msgs/Twist.h>
-#include <nav_msgs/Path.h>
+#include <memory>
+#include <vector>
 
-class BaseController
+namespace graceful_controller
+{
+
+class GracefulController
 {
 public:
-  explicit BaseController(ros::NodeHandle& nh);
+  /**
+   * @brief Constructor of the controller.
+   * @param k1
+   * @param k2
+   * @param
+   */
+  GracefulController(double k1,
+                     double k2,
+                     double min_velocity,
+                     double max_velocity,
+                     double max_angular_velocity,
+                     double beta,
+                     double lambda);
 
   /**
    * @brief Implements something loosely based on "A Smooth Control Law for
    * Graceful Motion of Differential Wheeled Mobile Robots in 2D Environments"
    * by Park and Kuipers, ICRA 2011
-   * @returns true if base has reached goal.
+   * @returns true if there is a solution.
    */
-  bool approach(const geometry_msgs::PoseStamped& target);
-
-  /**
-   * @brief Back off dock, then rotate. Robot is first reversed by the 
-   *        prescribed distance, and then rotates with respect to it's current
-   *        orientation.
-   * @param distance        Distance in meters to backup.
-   * @param rotate_distance Amount of angle in radians for the robot to yaw.
-   */
-  bool backup(double distance, double rotate_distance);
-
-  /**
-   * @brief Get the last command sent
-   */
-  bool getCommand(geometry_msgs::Twist& command);
-
-  /** @brief send stop command to robot base */
-  void stop();
+  bool approach(const double x, const double y, const double theta,
+                double& vel_x, double& vel_th);
 
 private:
-  ros::Publisher cmd_vel_pub_;  // Publisher of commands
-  ros::Publisher path_pub_;  // Publisher of paths
-
-  tf::TransformListener listener_;
-  geometry_msgs::Twist command_;
-
   /*
    * Parameters for approach controller
    */
@@ -72,13 +64,10 @@ private:
   double beta_;  // how fast velocity drops as k increases
   double lambda_;  // ??
   double dist_;  // used to create the tracking line
-
-  /*
-   * Parameters for backup controller
-   */
-  geometry_msgs::PoseStamped start_;
-  bool ready_;
-  bool turning_;
 };
 
-#endif  // FETCH_AUTO_DOCK_CONTROLLER_H
+using GracefulControllerPtr = std::shared_ptr<GracefulController>;
+
+}  // namespace graceful_controller
+
+#endif  // GRACEFUL_CONTROLLER_HPP
