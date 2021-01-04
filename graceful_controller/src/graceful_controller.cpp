@@ -59,7 +59,7 @@ bool GracefulController::approach(const double x, const double y, const double t
   // Compute the virtual control
   double a = atan(-k1_ * theta2);
   // Compute curvature (k)
-  double k = -1.0/r * (k2_ * (delta - a) + (1 + (k1_/1+((k1_*theta2)*(k1_*theta2))))*sin(delta));
+  double k = -1.0/r * (k2_ * (delta - a) + (1 + (k1_/(1+((k1_*theta2)*(k1_*theta2)))))*sin(delta));
 
   // Compute max_velocity based on curvature
   double v = max_velocity_ / (1 + beta_ * std::pow(fabs(k), lambda_));
