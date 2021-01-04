@@ -1,0 +1,7 @@
+<library path="lib/libgraceful_controller_ros">
+  <class name="graceful_controller/GracefulControllerROS" type="graceful_controller::GracefulControllerROS" base_class_type="nav_core::BaseLocalPlanner">
+    <description>
+      A implementation of a local planner based on "A Smooth Control Law for Graceful Motion of Differential Wheeled Mobile Robots in 2D Environments" by Park and Kuipers, ICRA 2011
+    </description>
+  </class>
+</library>
