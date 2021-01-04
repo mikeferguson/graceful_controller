@@ -76,11 +76,12 @@ public:
     }
 
     dsrv_ = new dynamic_reconfigure::Server<GracefulControllerConfig>(private_nh);
-    dynamic_reconfigure::Server<GracefulControllerConfig>::CallbackType cb = boost::bind(&GracefulControllerROS::reconfigureCB, this, _1, _2);
+    dynamic_reconfigure::Server<GracefulControllerConfig>::CallbackType cb =
+      boost::bind(&GracefulControllerROS::reconfigureCallback, this, _1, _2);
     dsrv_->setCallback(cb);
   }
 
-  void reconfigureCB(GracefulControllerConfig &config, uint32_t level)
+  void reconfigureCallback(GracefulControllerConfig &config, uint32_t level)
   {
     // Update generic local planner params
     base_local_planner::LocalPlannerLimits limits;
@@ -105,6 +106,7 @@ public:
 
     xy_goal_tolerance_ = config.xy_goal_tolerance;
     max_lookahead_ = config.max_lookahead;
+    resolution_ = planner_util_.getCostmap()->getResolution();
 
     controller_ = std::make_shared<GracefulController>(config.k1,
                                                        config.k2,
@@ -113,8 +115,6 @@ public:
                                                        config.max_vel_theta,
                                                        config.beta,
                                                        config.lambda);
-
-    resolution_ = planner_util_.getCostmap()->getResolution();
   }
 
   virtual bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
@@ -242,7 +242,7 @@ public:
 
           // Forward simulate command
           geometry_msgs::PoseStamped next_pose;
-          next_pose.header.frame_id = "base_link";
+          next_pose.header.frame_id = costmap_ros_->getBaseFrameID();
           if (path.empty())
           {
             // Initialize at origin
@@ -273,7 +273,7 @@ public:
           if (planner_util_.getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
           {
             // Collision - can't go this far!
-            ROS_WARN("Collision at %f %f", next_pose.pose.position.x, next_pose.pose.position.y);
+            ROS_DEBUG("Collision at %f %f", next_pose.pose.position.x, next_pose.pose.position.y);
             continue;
           }
         }
@@ -302,7 +302,7 @@ public:
     double dist = base_local_planner::getGoalPositionDistance(robot_pose_,
                                                               goal.pose.position.x,
                                                               goal.pose.position.y);
-    return (dist < 0.1);  // TODO: parameterize
+    return (dist < xy_goal_tolerance_);
   }
 
   virtual bool setPlan(const std::vector<geometry_msgs::PoseStamped>& plan)

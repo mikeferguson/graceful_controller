@@ -22,6 +22,9 @@ Outstanding issues:
  * When k1/k2 are cranked high, oscillation occurs. But if you're pointed
    in a bad direction initially, it takes a very wide arc to get back on
    the path. Need to add a parameter to turn towards the path initially.
+ * Should add an "initialized" flag so we only initialize() once.
+ * Need to add locking for controller instance to prevent reconfigure
+   and computeVelocityCommands don't interact poorly.
  * There are absolutely no tests.
 
 ## Licensing
