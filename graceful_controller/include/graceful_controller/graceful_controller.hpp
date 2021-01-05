@@ -31,14 +31,18 @@ class GracefulController
 public:
   /**
    * @brief Constructor of the controller.
-   * @param k1
-   * @param k2
-   * @param
+   * @param k1 Ratio of rate of change of theta to rate of change of R.
+   * @param k2 How quickly we converge to the slow manifold.
+   * @param min_velocity The minimum velocity in the linear direction.
+   * @param max_velocity The maximum velocity in the linear direction.
+   * @param max_velocity The maximum velocity in the linear direction.
+   * @param max_angular_velocity The maximum velocity in the linear direction.
    */
   GracefulController(double k1,
                      double k2,
                      double min_velocity,
                      double max_velocity,
+                     double max_accel,
                      double max_angular_velocity,
                      double beta,
                      double lambda);
@@ -47,6 +51,11 @@ public:
    * @brief Implements something loosely based on "A Smooth Control Law for
    * Graceful Motion of Differential Wheeled Mobile Robots in 2D Environments"
    * by Park and Kuipers, ICRA 2011
+   * @param x The x coordinate of the goal, relative to robot base link.
+   * @param y The y coordinate of the goal, relative to robot base link.
+   * @param theta The angular orientation of the goal, relative to robot base link.
+   * @param vel_x The computed command velocity in the linear direction.
+   * @param vel_th The computed command velocity in the angular direction.
    * @returns true if there is a solution.
    */
   bool approach(const double x, const double y, const double theta,
@@ -60,6 +69,7 @@ private:
   double k2_;  // speed at which we converge to slow system
   double min_velocity_;
   double max_velocity_;
+  double max_accel_;
   double max_angular_velocity_;
   double beta_;  // how fast velocity drops as k increases
   double lambda_;  // ??

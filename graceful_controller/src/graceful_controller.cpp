@@ -31,6 +31,7 @@ namespace graceful_controller
 
 GracefulController::GracefulController(double k1, double k2,
                                        double min_velocity, double max_velocity,
+                                       double max_accel,
                                        double max_angular_velocity,
                                        double beta, double lambda)
 {
@@ -38,6 +39,7 @@ GracefulController::GracefulController(double k1, double k2,
   k2_ = k2;
   min_velocity_ = min_velocity;
   max_velocity_ = max_velocity;
+  max_accel_ = max_accel;
   max_angular_velocity_ = max_angular_velocity;
   beta_ = beta;
   lambda_ = lambda;
@@ -57,21 +59,16 @@ bool GracefulController::approach(const double x, const double y, const double t
   double theta2 = angles::normalize_angle(theta + delta);
 
   // Compute the virtual control
-  double a = atan(-k1_ * theta2);
+  double a = std::atan(-k1_ * theta2);
   // Compute curvature (k)
   double k = -1.0/r * (k2_ * (delta - a) + (1 + (k1_/(1+((k1_*theta2)*(k1_*theta2)))))*sin(delta));
 
   // Compute max_velocity based on curvature
   double v = max_velocity_ / (1 + beta_ * std::pow(fabs(k), lambda_));
-  // Limit max velocity based on approaching target (avoids overshoot)
-  if (r < 0.75)
-  {
-    v = std::max(min_velocity_, std::min(std::min(r, max_velocity_), v));
-  }
-  else
-  {
-    v = std::min(max_velocity_, std::max(min_velocity_, v));
-  }
+  // Limit velocity based on approaching target
+  double approach_limit = std::sqrt(2 * max_accel_ * r);
+  v = std::min(v, approach_limit);
+  v = std::min(std::max(v, min_velocity_), max_velocity_);
 
   // Compute angular velocity
   double w = k * v;
