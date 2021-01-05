@@ -37,10 +37,12 @@
 *********************************************************************/
 
 #include <cmath>
+#include <mutex>
 
 #include <nav_core/base_local_planner.h>
 #include <nav_msgs/Path.h>
 
+#include <angles/angles.h>
 #include <base_local_planner/local_planner_util.h>
 #include <base_local_planner/goal_functions.h>
 #include <base_local_planner/odometry_helper_ros.h>
@@ -54,35 +56,62 @@
 namespace graceful_controller
 {
 
+double sign(double x)
+{
+  return x < 0.0 ? -1.0 : 1.0;
+}
+
 class GracefulControllerROS : public nav_core::BaseLocalPlanner
 {
 public:
-
-  virtual void initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+  GracefulControllerROS() :
+    initialized_(false),
+    has_new_path_(false)
   {
-    ros::NodeHandle private_nh("~/" + name);
-
-    // Publishers
-    global_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
-    local_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
-
-    buffer_ = tf;
-    costmap_ros_ = costmap_ros;
-    costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
-    planner_util_.initialize(tf, costmap, costmap_ros_->getGlobalFrameID());
-    if (private_nh.getParam("odom_topic", odom_topic_))
-    {
-      odom_helper_.setOdomTopic(odom_topic_);
-    }
-
-    dsrv_ = new dynamic_reconfigure::Server<GracefulControllerConfig>(private_nh);
-    dynamic_reconfigure::Server<GracefulControllerConfig>::CallbackType cb =
-      boost::bind(&GracefulControllerROS::reconfigureCallback, this, _1, _2);
-    dsrv_->setCallback(cb);
   }
 
+  /**
+   * @brief Constructs the local planner
+   * @param name The name to give this instance of the local planner
+   * @param tf A pointer to a transform buffer
+   * @param costmap_ros The cost map to use for assigning costs to local plans
+   */
+  virtual void initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+  {
+    if (!initialized_)
+    {
+      // Publishers (same topics as DWA/TrajRollout)
+      ros::NodeHandle private_nh("~/" + name);
+      global_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
+      local_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
+
+      buffer_ = tf;
+      costmap_ros_ = costmap_ros;
+      costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
+      planner_util_.initialize(tf, costmap, costmap_ros_->getGlobalFrameID());
+
+      initialized_ = true;
+
+      // Dynamic reconfigure is really only intended for tuning controller!
+      dsrv_ = new dynamic_reconfigure::Server<GracefulControllerConfig>(private_nh);
+      dynamic_reconfigure::Server<GracefulControllerConfig>::CallbackType cb =
+        boost::bind(&GracefulControllerROS::reconfigureCallback, this, _1, _2);
+      dsrv_->setCallback(cb);
+    }
+    else
+    {
+      ROS_WARN("This planner has already been initialized, doing nothing.");
+    }
+  }
+
+  /**
+   * @brief Callback for dynamic reconfigure server.
+   */
   void reconfigureCallback(GracefulControllerConfig &config, uint32_t level)
   {
+    // Lock the mutex
+    std::lock_guard<std::mutex> lock(config_mutex_);
+
     // Update generic local planner params
     base_local_planner::LocalPlannerLimits limits;
     limits.max_vel_trans = config.max_vel_trans;
@@ -105,20 +134,40 @@ public:
     planner_util_.reconfigureCB(limits, false);
 
     xy_goal_tolerance_ = config.xy_goal_tolerance;
+    yaw_goal_tolerance_ = config.yaw_goal_tolerance;
+    min_in_place_vel_theta_ = config.min_in_place_vel_theta;
     max_lookahead_ = config.max_lookahead;
+    initial_rotate_ = config.initial_rotate;
+    initial_rotate_tolerance_ = config.initial_rotate_tolerance;
     resolution_ = planner_util_.getCostmap()->getResolution();
 
     controller_ = std::make_shared<GracefulController>(config.k1,
                                                        config.k2,
                                                        config.min_vel_x,
                                                        config.max_vel_x,
+                                                       config.acc_lim_x,
                                                        config.max_vel_theta,
                                                        config.beta,
                                                        config.lambda);
   }
 
+  /**
+   * @brief Given the current position, orientation, and velocity of the robot, compute
+   *        velocity commands to send to the base
+   * @param cmd_vel Will be filled with the velocity command to be passed to the robot base
+   * @return True if a valid velocity command was found, false otherwise
+   */
   virtual bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
   {
+    if (!initialized_)
+    {
+      ROS_ERROR("Planner is not initialized, call initialize() before using this planner");
+      return false;
+    }
+
+    // Lock the mutex
+    std::lock_guard<std::mutex> lock(config_mutex_);
+
     if (!costmap_ros_->getRobotPose(robot_pose_))
     {
       ROS_ERROR("Could not get the robot pose");
@@ -140,13 +189,33 @@ public:
       return false;
     }
 
+    // Get transforms
+    geometry_msgs::TransformStamped odom_to_base, base_to_odom;
+    try
+    {
+      odom_to_base = buffer_->lookupTransform(costmap_ros_->getBaseFrameID(),
+                                              costmap_ros_->getGlobalFrameID(),
+                                              ros::Time(),
+                                              ros::Duration(0.5));
+      tf2::Stamped<tf2::Transform> tf2_odom_to_base;
+      tf2::convert(odom_to_base, tf2_odom_to_base);
+      tf2_odom_to_base.setData(tf2_odom_to_base.inverse());
+      base_to_odom = tf2::toMsg(tf2_odom_to_base);
+    }
+    catch (tf2::TransformException& ex)
+    {
+      ROS_ERROR("Could not transform to %s", costmap_ros_->getBaseFrameID().c_str());
+      return false;
+    }
+
     double dx = transformed_plan.back().pose.position.x - robot_pose_.pose.position.x;
     double dy = transformed_plan.back().pose.position.y - robot_pose_.pose.position.y;
     if (std::hypot(dx, dy) < xy_goal_tolerance_)
     {
-      // Goal reached
-      cmd_vel.linear.x = 0.0;
-      cmd_vel.angular.z = 0.0;
+      // XY goal tolerance reached - now just rotate towards goal
+      geometry_msgs::PoseStamped goal;
+      tf2::doTransform(transformed_plan.back(), goal, odom_to_base);
+      rotateTowards(goal, cmd_vel);
       return true;
     }
 
@@ -164,43 +233,30 @@ public:
       }
 
       // Transform pose into base_link
-      geometry_msgs::TransformStamped base_to_odom;
-      try
-      {
-        // Transform goal pose into base_link frame
-        geometry_msgs::TransformStamped odom_to_base =
-          buffer_->lookupTransform(costmap_ros_->getBaseFrameID(),
-                                   costmap_ros_->getGlobalFrameID(), 
-                                   ros::Time(),
-                                   ros::Duration(0.5));
-        tf2::doTransform(pose, pose, odom_to_base);
-        // Store the inverse for later
-        tf2::Stamped<tf2::Transform> tf2_odom_to_base;
-        tf2::convert(odom_to_base, tf2_odom_to_base);
-        base_to_odom = tf2::toMsg(tf2_odom_to_base);
-      }
-      catch (tf2::TransformException& ex)
-      {
-        ROS_ERROR("Could not transform to %s", costmap_ros_->getBaseFrameID().c_str());
-        return false;
-      }
+      tf2::doTransform(pose, pose, odom_to_base);
 
-      // Get control and path, iteratively
+      if (has_new_path_ && initial_rotate_)
+      {
+        // Rotate towards goal
+        if (fabs(rotateTowards(pose, cmd_vel)) < initial_rotate_tolerance_)
+        {
+          ROS_INFO("Done rotating towards path");
+          has_new_path_ = false;
+        }
+        return true;
+      }
+      else
       {
         // Simulated path (for debugging/visualization)
         std::vector<geometry_msgs::PoseStamped> path;
+        // Get control and path, iteratively
         while (true)
         {
           // The error between current robot pose and the lookahead goal
           geometry_msgs::PoseStamped error = pose;
 
           // Extract error_angle
-          double error_angle = 0.0;
-          {
-            tf2::Quaternion orientation;
-            tf2::convert(error.pose.orientation, orientation);
-            error_angle = tf2::getYaw(orientation);
-          }
+          double error_angle = tf2::getYaw(error.pose.orientation);
 
           // Move origin to our current simulated pose
           if (!path.empty())
@@ -208,9 +264,7 @@ public:
             double x = error.pose.position.x - path.back().pose.position.x;
             double y = error.pose.position.y - path.back().pose.position.y;
 
-            tf2::Quaternion orientation;
-            tf2::convert(path.back().pose.orientation, orientation);
-            double theta = -tf2::getYaw(orientation);
+            double theta = -tf2::getYaw(path.back().pose.orientation);
             error.pose.position.x = x * cos(theta) - y * sin(theta);
             error.pose.position.y = y * cos(theta) + x * sin(theta);
 
@@ -256,9 +310,7 @@ public:
 
           // Generate next pose
           double dt = resolution_ / vel_x;
-          tf2::Quaternion orientation;
-          tf2::convert(next_pose.pose.orientation, orientation);
-          double yaw = tf2::getYaw(orientation);
+          double yaw = tf2::getYaw(next_pose.pose.orientation);
           next_pose.pose.position.x += dt * vel_x * cos(yaw);
           next_pose.pose.position.y += dt * vel_x * sin(yaw);
           yaw += dt * vel_th;
@@ -269,12 +321,16 @@ public:
           // Check next pose for collision
           tf2::doTransform(next_pose, next_pose, base_to_odom);
           unsigned mx, my;
-          planner_util_.getCostmap()->worldToMap(next_pose.pose.position.x, next_pose.pose.position.y, mx, my);
+          if (!planner_util_.getCostmap()->worldToMap(next_pose.pose.position.x, next_pose.pose.position.y, mx, my))
+          {
+            ROS_DEBUG("Path is off costmap (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
+            break;
+          }
           if (planner_util_.getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
           {
             // Collision - can't go this far!
-            ROS_DEBUG("Collision at %f %f", next_pose.pose.position.x, next_pose.pose.position.y);
-            continue;
+            ROS_DEBUG("Collision along path at (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
+            break;
           }
         }
       }
@@ -284,8 +340,18 @@ public:
     return false;
   }
 
+  /**
+   * @brief Check if the goal pose has been achieved by the local planner
+   * @return True if achieved, false otherwise
+   */
   virtual bool isGoalReached()
   {
+    if (!initialized_)
+    {
+      ROS_ERROR("Planner is not initialized, call initialize() before using this planner");
+      return false;
+    }
+
     if (!costmap_ros_->getRobotPose(robot_pose_))
     {
       ROS_ERROR("Could not get the robot pose");
@@ -299,14 +365,28 @@ public:
       return false;
     }
 
-    double dist = base_local_planner::getGoalPositionDistance(robot_pose_,
-                                                              goal.pose.position.x,
-                                                              goal.pose.position.y);
-    return (dist < xy_goal_tolerance_);
+    double dist = std::hypot(goal.pose.position.x - robot_pose_.pose.position.x,
+                             goal.pose.position.y - robot_pose_.pose.position.y);
+
+    double angle = angles::shortest_angular_distance(tf2::getYaw(goal.pose.orientation),
+                                                     tf2::getYaw(robot_pose_.pose.orientation));
+
+    return (dist < xy_goal_tolerance_) && (fabs(angle) < yaw_goal_tolerance_);
   }
 
+  /**
+   * @brief Set the plan that the local planner is following
+   * @param plan The plan to pass to the local planner
+   * @return True if the plan was updated successfully, false otherwise
+   */
   virtual bool setPlan(const std::vector<geometry_msgs::PoseStamped>& plan)
   {
+    if (!initialized_)
+    {
+      ROS_ERROR("Planner is not initialized, call initialize() before using this planner");
+      return false;
+    }
+
     // We need orientations on our poses
     std::vector<geometry_msgs::PoseStamped> oriented_plan;
     oriented_plan.resize(plan.size());
@@ -327,24 +407,75 @@ public:
 
     // TODO: filter noisy orientations?
 
-    return planner_util_.setPlan(oriented_plan);
+    if (planner_util_.setPlan(oriented_plan))
+    {
+      has_new_path_ = true;
+      ROS_INFO("Recieved a new path with %lu points", oriented_plan.size());
+      return true;
+    }
+
+    // Signal error
+    return false;
+  }
+
+  /**
+   * @brief Rotate the robot towards a goal.
+   * @param pose The pose should always be in base frame!
+   * @param cmd_vel The returned command velocity
+   * @returns The computed angular error.
+   */
+  double rotateTowards(const geometry_msgs::PoseStamped& pose,
+                       geometry_msgs::Twist& cmd_vel)
+  {
+    // Determine error
+    double yaw = 0.0;
+    if (std::hypot(pose.pose.position.x, pose.pose.position.y) > 0.5)
+    {
+      // Goal is far away, point towards goal
+      yaw = std::atan2(pose.pose.position.y, pose.pose.position.x);
+    }
+    else
+    {
+      // Goal is nearby, align heading
+      tf2::Quaternion orientation;
+      yaw = tf2::getYaw(pose.pose.orientation);
+    }
+
+    ROS_DEBUG("Rotating towards goal, error = %f", yaw);
+
+    // Get limits so we can compute velocity
+    base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
+
+    cmd_vel.linear.x = 0.0;
+    cmd_vel.angular.z = sqrt(2 * limits.acc_lim_theta * fabs(yaw));
+    cmd_vel.angular.z = sign(yaw) * std::min(limits.max_vel_theta, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
+
+    // Return error
+    return yaw;
   }
 
 private:
   ros::Publisher global_plan_pub_, local_plan_pub_;
 
+  bool initialized_;
   GracefulControllerPtr controller_;
 
   tf2_ros::Buffer* buffer_;
   costmap_2d::Costmap2DROS* costmap_ros_;
   base_local_planner::LocalPlannerUtil planner_util_;
-  base_local_planner::OdometryHelperRos odom_helper_;
-  std::string odom_topic_;
 
+  std::mutex config_mutex_;
   dynamic_reconfigure::Server<GracefulControllerConfig> *dsrv_;
+  double min_in_place_vel_theta_;
   double xy_goal_tolerance_;
+  double yaw_goal_tolerance_;
   double max_lookahead_;
   double resolution_;
+
+  // Controls initial rotation towards path
+  bool initial_rotate_;
+  double initial_rotate_tolerance_;
+  bool has_new_path_;
 
   geometry_msgs::PoseStamped robot_pose_;
 };
