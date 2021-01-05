@@ -10,22 +10,12 @@ has a naive approach which attempts to use the farthest pose in the path
 which is both A) less than some maximum lookahead distance away, and B)
 reachable with our current control law parameters without collision.
 
-Outstanding issues:
+## Example Config
 
- * The velocity selection is not sufficiently awesome when you are
-   reaching the end of the path - so sometimes you overshoot the end of the
-   path if there is no curvature immediately preceding it (see lines 67-74
-   of graceful_controller.cpp).
- * Currently, we only check success in X/Y - if the controller came in
-   at a bad angle, the heading will be wrong. Need to still implement a
-   "turn to goal" like the latched controller in DWA/TrajRollout.
- * When k1/k2 are cranked high, oscillation occurs. But if you're pointed
-   in a bad direction initially, it takes a very wide arc to get back on
-   the path. Need to add a parameter to turn towards the path initially.
- * Should add an "initialized" flag so we only initialize() once.
- * Need to add locking for controller instance to prevent reconfigure
-   and computeVelocityCommands don't interact poorly.
- * There are absolutely no tests.
+There is an example configuration for running this controller on the UBR1
+in ROS1 simulation on the
+[graceful_controller](https://github.com/mikeferguson/ubr_reloaded/tree/graceful_controller)
+branch.
 
 ## Licensing
 
