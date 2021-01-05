@@ -7,30 +7,11 @@ endif()
 
 find_package(catkin REQUIRED
   COMPONENTS
-    actionlib
     angles
-    geometry_msgs
-    nav_msgs
-    roslib
-    roscpp
-    rospy
-    std_msgs
-    tf
 )
-find_package(Eigen3 REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
-  CATKIN_DEPENDS
-    actionlib
-    geometry_msgs
-    nav_msgs
-    roslib
-    roscpp
-    rospy
-    sensor_msgs
-    std_msgs
-    tf
   LIBRARIES
     graceful_controller
 )
@@ -38,7 +19,6 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIRS}
 )
 
 add_library(graceful_controller
