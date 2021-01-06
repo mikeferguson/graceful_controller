@@ -1,60 +1,39 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(graceful_controller_ros)
 
-if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
 endif()
 
-find_package(catkin REQUIRED
-  COMPONENTS
-    angles
-    base_local_planner
-    costmap_2d
-    dynamic_reconfigure
-    geometry_msgs
-    graceful_controller
-    nav_msgs
-    pluginlib
-    roscpp
-    std_msgs
-    tf2_geometry_msgs
-    tf2_ros
-)
-
-generate_dynamic_reconfigure_options(
-    cfg/GracefulController.cfg
-)
-
-catkin_package(
-  INCLUDE_DIRS
-    include
-  CATKIN_DEPENDS
-    base_local_planner
-    costmap_2d
-    dynamic_reconfigure
-    geometry_msgs
-    graceful_controller
-    nav_msgs
-    pluginlib
-    roscpp
-    std_msgs
-    tf2_geometry_msgs
-    tf2_ros
-  LIBRARIES
-    graceful_controller_ros
-)
-
-if (CATKIN_ENABLE_TESTING AND ENABLE_COVERAGE_TESTING)
-  find_package(code_coverage REQUIRED)
-  APPEND_COVERAGE_COMPILER_FLAGS()
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
 endif()
 
-include_directories(
-  include
-  ${catkin_INCLUDE_DIRS}
-)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-add_library(graceful_controller_ros
+find_package(ament_cmake REQUIRED)
+find_package(angles REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(graceful_controller REQUIRED)
+find_package(nav_2d_utils REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(nav2_core REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(nav2_util REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(visualization_msgs REQUIRED)
+
+include_directories(include)
+
+add_library(graceful_controller_ros SHARED
   src/graceful_controller_ros.cpp
   src/orientation_tools.cpp
   src/visualization.cpp
@@ -62,46 +41,68 @@ add_library(graceful_controller_ros
 target_link_libraries(graceful_controller_ros
   ${catkin_LIBRARIES}
 )
-add_dependencies(graceful_controller_ros
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
+ament_target_dependencies(graceful_controller_ros
+  angles
+  geometry_msgs
+  graceful_controller
+  nav_2d_utils
+  nav_msgs
+  nav2_core
+  nav2_costmap_2d
+  nav2_util
+  pluginlib
+  rclcpp
+  std_msgs
+  tf2_geometry_msgs
+  tf2_ros
+  visualization_msgs
 )
 
 if(CATKIN_ENABLE_TESTING)
-  find_package(rostest)
+  #find_package(ament_cmake_gtest REQUIRED)
+  #find_package(rostest)
 
-  add_executable(graceful_controller_tests
-    test/graceful_controller_tests.cpp
-  )
-  target_link_libraries(graceful_controller_tests
-    ${catkin_LIBRARIES}
-    ${GTEST_LIBRARIES}
-  )
-  add_dependencies(tests graceful_controller_tests)
-  add_rostest(test/graceful_controller.test)
+  #add_executable(graceful_controller_tests
+  #  test/graceful_controller_tests.cpp
+  #)
+  #target_link_libraries(graceful_controller_tests
+  #  ${catkin_LIBRARIES}
+  #  ${GTEST_LIBRARIES}
+  #)
+  #add_dependencies(tests graceful_controller_tests)
+  #add_rostest(test/graceful_controller.test)
 
-  catkin_add_gtest(orientation_filter_tests
-    src/orientation_tools.cpp
-    test/orientation_tools_tests.cpp
-  )
-  target_link_libraries(orientation_filter_tests
-    ${catkin_LIBRARIES}
-  )
-
-  if(ENABLE_COVERAGE_TESTING)
-    set(COVERAGE_EXCLUDES "*/${PROJECT_NAME}/test*")
-    add_code_coverage(
-      NAME ${PROJECT_NAME}_coverage_report
-      DEPENDS tests
-    )
-  endif()
+  #catkin_add_gtest(orientation_filter_tests
+  #  src/orientation_tools.cpp
+  #  test/orientation_tools_tests.cpp
+  #)
+  #target_link_libraries(orientation_filter_tests
+  #  ${catkin_LIBRARIES}
+  #)
 endif()
 
 install(TARGETS graceful_controller_ros
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/graceful_controller_ros
 )
 
-install(FILES plugins.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+ament_export_include_directories(include)
+ament_export_libraries(graceful_controller_ros)
+ament_export_dependencies(
+  geometry_msgs
+  graceful_controller
+  nav_2d_utils
+  nav_msgs
+  nav2_core
+  nav2_costmap_2d
+  nav2_util
+  pluginlib
+  rclcpp
+  std_msgs
+  tf2_geometry_msgs
+  tf2_ros
+  visualization_msgs
 )
+pluginlib_export_plugin_description_file(nav2_core plugins.xml)
+ament_package()

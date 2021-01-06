@@ -35,7 +35,7 @@
 
 #include "graceful_controller_ros/visualization.hpp"
 
-void addPointMarker(double x, double y, bool colliding, visualization_msgs::MarkerArray* msg)
+void addPointMarker(double x, double y, bool colliding, visualization_msgs::msg::MarkerArray* msg)
 {
   if (!msg)
   {
@@ -49,20 +49,20 @@ void addPointMarker(double x, double y, bool colliding, visualization_msgs::Mark
     msg->markers.resize(1);
     msg->markers[0].type = msg->markers[0].POINTS;
     msg->markers[0].header.frame_id = "odom";
-    msg->markers[0].header.stamp = ros::Time::now();
+    //msg->markers[0].header.stamp = ros::Time::now();
     msg->markers[0].pose.orientation.w = 1.0;
     msg->markers[0].scale.x = 0.02;
     msg->markers[0].scale.y = 0.02;
     msg->markers[0].scale.z = 0.02;
   }
 
-  geometry_msgs::Point point;
+  geometry_msgs::msg::Point point;
   point.x = x;
   point.y = y;
   point.z = 0.0;
   msg->markers[0].points.push_back(point);
 
-  std_msgs::ColorRGBA color;
+  std_msgs::msg::ColorRGBA color;
   if (colliding)
   {
     // Colliding points are RED

@@ -2,7 +2,7 @@
  *
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2021, Michael Ferguson
+ *  Copyright (c) 2021-2022, Michael Ferguson
  *  Copyright (c) 2009, Willow Garage, Inc.
  *  All rights reserved.
  *
@@ -36,7 +36,6 @@
  * Author: Michael Ferguson
  *********************************************************************/
 
-#include <ros/ros.h>
 #include <angles/angles.h>
 #include <tf2/utils.h>  // getYaw
 #include "graceful_controller_ros/orientation_tools.hpp"
@@ -44,22 +43,23 @@
 namespace graceful_controller
 {
 // Helper function to get yaw if "from" were to point towards "to"
-double getRelativeYaw(const geometry_msgs::PoseStamped& from, const geometry_msgs::PoseStamped& to)
+double getRelativeYaw(const geometry_msgs::msg::PoseStamped& from, const geometry_msgs::msg::PoseStamped& to)
 {
   double dx = to.pose.position.x - from.pose.position.x;
   double dy = to.pose.position.y - from.pose.position.y;
   return std::atan2(dy, dx);
 }
 
-void setYaw(geometry_msgs::PoseStamped& pose, double yaw)
+void setYaw(geometry_msgs::msg::PoseStamped& pose, double yaw)
 {
   pose.pose.orientation.z = sin(yaw / 2.0);
   pose.pose.orientation.w = cos(yaw / 2.0);
 }
 
-std::vector<geometry_msgs::PoseStamped> addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
+std::vector<geometry_msgs::msg::PoseStamped> addOrientations(const std::vector<geometry_msgs::msg::PoseStamped>& path)
 {
-  std::vector<geometry_msgs::PoseStamped> oriented_path;
+  std::vector<geometry_msgs::msg::PoseStamped> oriented_path;
+  oriented_plan.header = path.header;
   oriented_path.resize(path.size());
   if (path.empty())
   {
@@ -81,10 +81,11 @@ std::vector<geometry_msgs::PoseStamped> addOrientations(const std::vector<geomet
   return oriented_path;
 }
 
-std::vector<geometry_msgs::PoseStamped> applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
-                                                               double yaw_tolerance, double gap_tolerance)
+std::vector<geometry_msgs::msg::PoseStamped> applyOrientationFilter(
+  const std::vector<geometry_msgs::msg::PoseStamped>& path,
+  double yaw_tolerance, double gap_tolerance)
 {
-  std::vector<geometry_msgs::PoseStamped> filtered_path;
+  std::vector<geometry_msgs::msg::PoseStamped> filtered_path;
   filtered_path.reserve(path.size());
   if (path.empty())
   {
@@ -120,7 +121,7 @@ std::vector<geometry_msgs::PoseStamped> applyOrientationFilter(const std::vector
     else if (std::hypot(path[i].pose.position.x - filtered_path.back().pose.position.x,
                         path[i].pose.position.y - filtered_path.back().pose.position.y) >= gap_tolerance)
     {
-      ROS_DEBUG_NAMED("orientation_filter", "Including pose %lu to meet max_separation_dist", i);
+      //ROS_DEBUG_NAMED("orientation_filter", "Including pose %lu to meet max_separation_dist", i);
       // Update previous heading in case we dropped some poses
       setYaw(filtered_path.back(), yaw_previous);
       // Add this pose to the filtered plan
@@ -129,7 +130,7 @@ std::vector<geometry_msgs::PoseStamped> applyOrientationFilter(const std::vector
     else
     {
       // Sorry pose, the plan is better without you :(
-      ROS_DEBUG_NAMED("orientation_filter", "Filtering pose %lu", i);
+      //ROS_DEBUG_NAMED("orientation_filter", "Filtering pose %lu", i);
     }
   }
 
@@ -139,7 +140,7 @@ std::vector<geometry_msgs::PoseStamped> applyOrientationFilter(const std::vector
   // Always add the last pose, since this is our goal
   filtered_path.push_back(path.back());
 
-  ROS_DEBUG_NAMED("orientation_filter", "Filtered %lu points from plan", path.size() - filtered_path.size());
+  //ROS_DEBUG_NAMED("orientation_filter", "Filtered %lu points from plan", path.size() - filtered_path.size());
   return filtered_path;
 }
 
