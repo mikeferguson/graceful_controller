@@ -1,45 +1,52 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.5)
 project(graceful_controller)
 
-if (CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
 endif()
 
-find_package(catkin REQUIRED
-  COMPONENTS
-    angles
-)
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
 
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES
-    graceful_controller
-)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(angles REQUIRED)
 
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS}
 )
 
-add_library(graceful_controller
+add_library(graceful_controller SHARED
   src/graceful_controller.cpp
 )
 target_link_libraries(graceful_controller
   ${catkin_LIBRARIES}
 )
-add_dependencies(graceful_controller
-  ${catkin_EXPORTED_TARGETS}
+ament_target_dependencies(graceful_controller
+  angles
 )
 
-if (CATKIN_ENABLE_TESTING)
-  # TODO
-endif()
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
 
 install(DIRECTORY include/
   DESTINATION include
 )
 
 install(TARGETS graceful_controller
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/graceful_controller
 )
+
+ament_export_include_directories(include)
+ament_export_libraries(graceful_controller)
+ament_package()
