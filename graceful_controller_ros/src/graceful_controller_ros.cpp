@@ -39,22 +39,19 @@
 #include <cmath>
 #include <mutex>
 
-#include <nav_core/base_local_planner.h>
-#include <nav_msgs/Path.h>
+#include "angles/angles.h"
+#include "graceful_controller/graceful_controller.hpp"
+#include "nav_2d_utils/parameters.hpp"
+#include "nav_msgs/msg/path.hpp"
+#include "nav2_core/controller.hpp"
+#include "nav2_costmap_2d/footprint.h"
+#include "nav2_util/line_iterator.hpp"
+#include "std_msgs/msg/float32.hpp"
+#include "tf2/utils.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
 
-#include <angles/angles.h>
-#include <base_local_planner/line_iterator.h>
-#include <base_local_planner/local_planner_util.h>
-#include <base_local_planner/goal_functions.h>
-#include <base_local_planner/odometry_helper_ros.h>
-#include <costmap_2d/footprint.h>
-#include <graceful_controller/graceful_controller.hpp>
-#include <std_msgs/Float32.h>
-#include <tf2/utils.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-
-#include <dynamic_reconfigure/server.h>
-#include <graceful_controller_ros/GracefulControllerConfig.h>
+using rclcpp_lifecycle::LifecyclePublisher;
+using nav2_util::declare_parameter_if_not_declared;
 
 namespace graceful_controller
 {
@@ -71,7 +68,7 @@ double sign(double x)
  * @param theta The robot rotation in costmap.global frame
  */
 bool isColliding(double x, double y, double theta,
-                 costmap_2d::Costmap2DROS* costmap)
+                 nav2_costmap_2d::Costmap2DROS* costmap)
 {
   unsigned mx, my;
   if (!costmap->getCostmap()->worldToMap(x, y, mx, my))
@@ -82,7 +79,7 @@ bool isColliding(double x, double y, double theta,
 
   std::vector<geometry_msgs::Point> spec = costmap->getRobotFootprint();
   std::vector<geometry_msgs::Point> footprint;
-  costmap_2d::transformFootprint(x, y, theta, spec, footprint);
+  nav2_costmap_2d::transformFootprint(x, y, theta, spec, footprint);
 
   // If our footprint is less than 4 corners, treat as circle
   if (footprint.size() < 4)
@@ -113,7 +110,7 @@ bool isColliding(double x, double y, double theta,
       return true;
     }
 
-    for (base_local_planner::LineIterator line(x0,y0,x1,y1); line.isValid(); line.advance())
+    for (nav2_util::LineIterator line(x0,y0,x1,y1); line.isValid(); line.advance())
     {
       if (costmap->getCostmap()->getCost(line.getX(), line.getY()) >= costmap_2d::LETHAL_OBSTACLE)
       {
@@ -127,11 +124,10 @@ bool isColliding(double x, double y, double theta,
   return false;
 }
 
-class GracefulControllerROS : public nav_core::BaseLocalPlanner
+class GracefulControllerROS : public nav2_core::Controller
 {
 public:
   GracefulControllerROS() :
-    initialized_(false),
     has_new_path_(false)
   {
   }
@@ -142,175 +138,165 @@ public:
    * @param tf A pointer to a transform buffer
    * @param costmap_ros The cost map to use for assigning costs to local plans
    */
-  virtual void initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
+  virtual void configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr & node,
+                         std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
+                         const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
   {
     if (!initialized_)
     {
-      // Publishers (same topics as DWA/TrajRollout)
-      ros::NodeHandle private_nh("~/" + name);
-      global_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
-      local_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
-
+      node_ = node;
       buffer_ = tf;
       costmap_ros_ = costmap_ros;
-      costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
-      planner_util_.initialize(tf, costmap, costmap_ros_->getGlobalFrameID());
+      name_ = name;
 
-      std::string odom_topic;
-      if (private_nh.getParam("odom_topic", odom_topic))
-      {
-        odom_helper_.setOdomTopic(odom_topic);
-        private_nh.param("acc_dt", acc_dt_, 0.25);
-      }
+      // Publishers (same topics as DWA/TrajRollout)
+      global_plan_pub_ = node_->create_publisher<nav_msgs::msg::Path>("global_plan", 1);
+      local_plan_pub_ = node_->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+
+      declare_parameter_if_not_declared(node_, name_ + ".max_vel_x");
+      declare_parameter_if_not_declared(node_, name_ + ".min_vel_x");
+      declare_parameter_if_not_declared(node_, name_ + ".max_vel_theta");
+      declare_parameter_if_not_declared(node_, name_ + ".min_vel_theta");
+      declare_parameter_if_not_declared(node_, name_ + ".min_in_place_vel_theta");
+      declare_parameter_if_not_declared(node_, name_ + ".acc_lim_x");
+      declare_parameter_if_not_declared(node_, name_ + ".acc_lim_theta");
+      declare_parameter_if_not_declared(node_, name_ + ".acc_dt", rclcpp::ParameterValue(0.25));
+      declare_parameter_if_not_declared(node_, name_ + ".xy_goal_tolerance");
+      declare_parameter_if_not_declared(node_, name_ + ".max_lookahead", rclcpp::ParameterValue(1.0));
+      declare_parameter_if_not_declared(node_, name_ + ".initial_rotate_tolerance", rclcpp::ParameterValue(0.1));
+      declare_parameter_if_not_declared(node_, name_ + ".use_vel_topic", rclcpp::ParameterValue(false));
+      declare_parameter_if_not_declared(node_, name_ + ".k1", rclcpp::ParameterValue(2.0));
+      declare_parameter_if_not_declared(node_, name_ + ".k2", rclcpp::ParameterValue(1.0));
+      declare_parameter_if_not_declared(node_, name_ + ".beta", rclcpp::ParameterValue(0.4));
+      declare_parameter_if_not_declared(node_, name_ + ".lambda", rclcpp::ParameterValue(2.0));
+
+      node_->get_parameter(name_ + ".max_vel_x", max_vel_x_);
+      node_->get_parameter(name_ + ".min_vel_x", min_vel_x_);
+      node_->get_parameter(name_ + ".max_vel_theta", max_vel_theta_);
+      node_->get_parameter(name_ + ".min_vel_theta", min_vel_theta_);
+      node_->get_parameter(name_ + ".min_in_place_vel_theta", min_in_place_vel_theta_);
+      node_->get_parameter(name_ + ".acc_lim_x", acc_lim_x_);
+      node_->get_parameter(name_ + ".acc_lim_theta", acc_lim_theta_);
+      node_->get_parameter(name_ + ".acc_dt", acc_dt_);
+      node_->get_parameter(name_ + ".xy_goal_tolerance", xy_goal_tolerance_);
+      node_->get_parameter(name_ + ".max_lookahead", max_lookahead_);
+      node_->get_parameter(name_ + ".initial_rotate_tolerance", initial_rotate_tolerance_);
+      resolution_ = costmap_ros_->getCostmap()->getResolution();
+      double k1, k2, beta, lambda;
+      node_->get_parameter(name_ + ".k1", k1);
+      node_->get_parameter(name_ + ".k2", k2);
+      node_->get_parameter(name_ + ".beta", beta);
+      node_->get_parameter(name_ + ".lambda", lambda);
 
       bool use_vel_topic = false;
-      private_nh.getParam("use_vel_topic", use_vel_topic);
+      node_->get_parameter(name_ + ".use_vel_topic", use_vel_topic);
       if (use_vel_topic)
       {
-        ros::NodeHandle nh;
-        max_vel_sub_ = nh.subscribe<std_msgs::Float32>("max_vel_x", 1,
-                         boost::bind(&GracefulControllerROS::velocityCallback, this, _1));
+        max_vel_sub_ = node_->create_subscription<std_msgs::msg::Float32>("max_vel_x", 1, std::bind(&GracefulControllerROS::velocityCallback, this, std::placeholders::_1));
       }
 
-      initialized_ = true;
+      controller_ = std::make_shared<GracefulController>(k1,
+                                                         k2,
+                                                         min_vel_x_,
+                                                         max_vel_x_,
+                                                         acc_lim_x_,
+                                                         max_vel_theta_,
+                                                         beta,
+                                                         lambda);
 
-      // Dynamic reconfigure is really only intended for tuning controller!
-      dsrv_ = new dynamic_reconfigure::Server<GracefulControllerConfig>(private_nh);
-      dynamic_reconfigure::Server<GracefulControllerConfig>::CallbackType cb =
-        boost::bind(&GracefulControllerROS::reconfigureCallback, this, _1, _2);
-      dsrv_->setCallback(cb);
+      initialized_ = true;
     }
     else
     {
-      ROS_WARN("This planner has already been initialized, doing nothing.");
+      RCLCPP_ERROR(logger_, "This planner has already been initialized, doing nothing.");
     }
   }
 
-  /**
-   * @brief Callback for dynamic reconfigure server.
-   */
-  void reconfigureCallback(GracefulControllerConfig &config, uint32_t level)
+  void activate()
   {
-    // Lock the mutex
-    std::lock_guard<std::mutex> lock(config_mutex_);
+    global_plan_pub_->on_activate();
+    local_plan_pub_->on_activate();
+    has_new_path_ = false;
+  }
 
-    // Need to configure the planner utils
-    base_local_planner::LocalPlannerLimits limits;
-    limits.max_vel_trans = 0.0;
-    limits.min_vel_trans = 0.0;
-    limits.max_vel_x = config.max_vel_x;
-    limits.min_vel_x = config.min_vel_x;
-    limits.max_vel_y = 0.0;
-    limits.min_vel_y = 0.0;
-    limits.max_vel_theta = config.max_vel_theta;
-    limits.min_vel_theta = config.min_vel_theta;
-    limits.acc_lim_x = config.acc_lim_x;
-    limits.acc_lim_y = 0.0;
-    limits.acc_lim_theta = config.acc_lim_theta;
-    limits.acc_lim_trans = 0.0;
-    limits.xy_goal_tolerance = config.xy_goal_tolerance;
-    limits.yaw_goal_tolerance = config.yaw_goal_tolerance;
-    limits.prune_plan = false;
-    limits.trans_stopped_vel = 0.0;
-    limits.theta_stopped_vel = 0.0;
-    planner_util_.reconfigureCB(limits, false);
+  void deactivate()
+  {
+    global_plan_pub_->on_deactivate();
+    local_plan_pub_->on_deactivate();
+  }
 
-    max_vel_x_ = config.max_vel_x;
-    min_vel_x_ = config.min_vel_x;
-    max_vel_theta_ = config.max_vel_theta;
-    min_vel_theta_ = config.min_vel_theta;
-    min_in_place_vel_theta_ = config.min_in_place_vel_theta;
-    acc_lim_x_ = config.acc_lim_x;
-    acc_lim_theta_ = config.acc_lim_theta;
-    xy_goal_tolerance_ = config.xy_goal_tolerance;
-    yaw_goal_tolerance_ = config.yaw_goal_tolerance;
-    max_lookahead_ = config.max_lookahead;
-    initial_rotate_tolerance_ = config.initial_rotate_tolerance;
-    resolution_ = planner_util_.getCostmap()->getResolution();
-
-    controller_ = std::make_shared<GracefulController>(config.k1,
-                                                       config.k2,
-                                                       config.min_vel_x,
-                                                       config.max_vel_x,
-                                                       config.acc_lim_x,
-                                                       config.max_vel_theta,
-                                                       config.beta,
-                                                       config.lambda);
+  void cleanup()
+  {
+    global_plan_pub_.reset();
+    global_plan_pub_.reset();
   }
 
   /**
-   * @brief Given the current position, orientation, and velocity of the robot, compute
-   *        velocity commands to send to the base
-   * @param cmd_vel Will be filled with the velocity command to be passed to the robot base
-   * @return True if a valid velocity command was found, false otherwise
+   * @brief Controller computeVelocityCommands - calculates the best command given the current pose and velocity
+   *
+   * It is presumed that the global plan is already set.
+   *
+   * @param robot_pose Current robot pose
+   * @param velocity Current robot velocity
+   * @return The best command for the robot to drive
    */
-  virtual bool computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
+  virtual geometry_msgs::msg::TwistStamped computeVelocityCommands(
+    const geometry_msgs::msg::PoseStamped& robot_pose,
+    const geometry_msgs::msg::Twist& velocity)
   {
+    geometry_msgs::msg::TwistStamped cmd_vel;
+    cmd_vel.header.frame_id = robot_pose.header.frame_id;
+    cmd_vel.header.stamp = clock_->now();
+
     if (!initialized_)
     {
-      ROS_ERROR("Planner is not initialized, call initialize() before using this planner");
-      return false;
+      RCLCPP_ERROR(logger_, "Controller is not initialized, call configure() before using this planner");
+      return cmd_vel;
     }
 
     // Lock the mutex
     std::lock_guard<std::mutex> lock(config_mutex_);
 
-    if (!costmap_ros_->getRobotPose(robot_pose_))
-    {
-      ROS_ERROR("Could not get the robot pose");
-      return false;
-    }
-
-    std::vector<geometry_msgs::PoseStamped> transformed_plan;
-    if (!planner_util_.getLocalPlan(robot_pose_, transformed_plan))
-    {
-      ROS_ERROR("Could not get local plan");
-      return false;
-    }
-
-    base_local_planner::publishPlan(transformed_plan, global_plan_pub_);
-
-    if (transformed_plan.empty())
-    {
-      ROS_WARN("Received an empty transform plan");
-      return false;
-    }
-
     // Get transforms
-    geometry_msgs::TransformStamped odom_to_base, base_to_odom;
+    geometry_msgs::msg::TransformStamped plan_to_base, base_to_odom;
     try
     {
-      odom_to_base = buffer_->lookupTransform(costmap_ros_->getBaseFrameID(),
+      plan_to_base = buffer_->lookupTransform(costmap_ros_->getBaseFrameID(),
                                               costmap_ros_->getGlobalFrameID(),
-                                              ros::Time(),
-                                              ros::Duration(0.5));
-      tf2::Stamped<tf2::Transform> tf2_odom_to_base;
-      tf2::convert(odom_to_base, tf2_odom_to_base);
-      tf2_odom_to_base.setData(tf2_odom_to_base.inverse());
-      base_to_odom = tf2::toMsg(tf2_odom_to_base);
+                                              tf2::TimePointZero);
     }
     catch (tf2::TransformException& ex)
     {
-      ROS_ERROR("Could not transform to %s", costmap_ros_->getBaseFrameID().c_str());
-      return false;
+      RCLCPP_ERROR(logger_, "Could not transform to %s", costmap_ros_->getBaseFrameID().c_str());
+      return cmd_vel;
     }
 
-    geometry_msgs::PoseStamped pose;
-     tf2::doTransform(transformed_plan.back(), pose, odom_to_base);
+    try
+    {
+      base_to_odom = buffer_->lookupTransform(costmap_ros_->getGlobalFrameID(),
+                                              costmap_ros_->getBaseFrameID(),
+                                              tf2::TimePointZero);
+    }
+    catch (tf2::TransformException& ex)
+    {
+      RCLCPP_ERROR(logger_, "Could not transform to %s", costmap_ros_->getGlobalFrameID().c_str());
+      return cmd_vel;
+    }
+
+    geometry_msgs::msg::PoseStamped pose;
+    tf2::doTransform(global_plan_.poses.back(), pose, plan_to_base);
     if (std::hypot(pose.pose.position.x, pose.pose.position.y) < xy_goal_tolerance_)
     {
       // XY goal tolerance reached - now just rotate towards goal
-      geometry_msgs::PoseStamped goal;
-      tf2::doTransform(transformed_plan.back(), goal, odom_to_base);
-      rotateTowards(goal, cmd_vel);
-      return true;
+      rotateTowards(pose, velocity, cmd_vel);
+      return cmd_vel;
     }
 
     // Work back from the end of plan
-    for (int i = transformed_plan.size() - 1; i >= 0; --i)
+    for (int i = global_plan_.poses.size() - 1; i >= 0; --i)
     {
       // Transform pose into base_link
-      tf2::doTransform(transformed_plan[i], pose, odom_to_base);
+      tf2::doTransform(global_plan_.poses[i], pose, plan_to_base);
 
       // Continue if this is too far away
       if (std::hypot(pose.pose.position.x, pose.pose.position.y) > max_lookahead_)
@@ -319,34 +305,32 @@ public:
       }
 
       // Configure controller max velocity based on current speed
-      if (!odom_helper_.getOdomTopic().empty())
+      if (acc_dt_ > 0.0)
       {
-        geometry_msgs::PoseStamped robot_velocity;
-        odom_helper_.getRobotVel(robot_velocity);
-        double max_vel_x = robot_velocity.pose.position.x + (acc_lim_x_ * acc_dt_);
+        double max_vel_x = velocity.linear.x + (acc_lim_x_ * acc_dt_);
         max_vel_x = std::min(max_vel_x, max_vel_x_);
         max_vel_x = std::max(max_vel_x, min_vel_x_);
         controller_->setVelocityLimits(min_vel_x_, max_vel_x, max_vel_theta_);
       }
 
       // Simulated path (for debugging/visualization)
-      std::vector<geometry_msgs::PoseStamped> path;
+      nav_msgs::msg::Path path;
       // Get control and path, iteratively
       while (true)
       {
         // The error between current robot pose and the lookahead goal
-        geometry_msgs::PoseStamped error = pose;
+        geometry_msgs::msg::PoseStamped error = pose;
 
         // Extract error_angle
         double error_angle = tf2::getYaw(error.pose.orientation);
 
         // Move origin to our current simulated pose
-        if (!path.empty())
+        if (!path.poses.empty())
         {
-          double x = error.pose.position.x - path.back().pose.position.x;
-          double y = error.pose.position.y - path.back().pose.position.y;
+          double x = error.pose.position.x - path.poses.back().pose.position.x;
+          double y = error.pose.position.y - path.poses.back().pose.position.y;
 
-          double theta = -tf2::getYaw(path.back().pose.orientation);
+          double theta = -tf2::getYaw(path.poses.back().pose.orientation);
           error.pose.position.x = x * cos(theta) - y * sin(theta);
           error.pose.position.y = y * cos(theta) + x * sin(theta);
 
@@ -360,41 +344,41 @@ public:
         if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle,
                                    vel_x, vel_th))
         {
-          ROS_ERROR("Unable to compute approach");
-          return false;
+          RCLCPP_ERROR(logger_, "Unable to compute approach");
+          return cmd_vel;
         }
 
-        if (path.empty())
+        if (path.poses.empty())
         {
-          cmd_vel.linear.x = vel_x;
-          cmd_vel.angular.z = vel_th;
+          cmd_vel.twist.linear.x = vel_x;
+          cmd_vel.twist.angular.z = vel_th;
         }
         else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
         {
           if (has_new_path_ && initial_rotate_tolerance_ > 0.0)
           {
             // Rotate towards goal
-            geometry_msgs::Twist rotation;
-            if (fabs(rotateTowards(pose, rotation)) < initial_rotate_tolerance_)
+            geometry_msgs::msg::TwistStamped rotation;
+            if (fabs(rotateTowards(pose, velocity, rotation)) < initial_rotate_tolerance_)
             {
-              ROS_INFO("Done rotating towards path");
+              RCLCPP_INFO(logger_, "Done rotating towards path");
               has_new_path_ = false;
             }
             else
             {
-              cmd_vel = rotation;
+              cmd_vel.twist = rotation.twist;
             }
           }
 
           // We have reached lookahead goal without collision
-          base_local_planner::publishPlan(path, local_plan_pub_);
-          return true;
+          local_plan_pub_->publish(path);
+          return cmd_vel;
         }
 
         // Forward simulate command
-        geometry_msgs::PoseStamped next_pose;
+        geometry_msgs::msg::PoseStamped next_pose;
         next_pose.header.frame_id = costmap_ros_->getBaseFrameID();
-        if (path.empty())
+        if (path.poses.empty())
         {
           // Initialize at origin
           next_pose.pose.orientation.w = 1.0;
@@ -402,7 +386,7 @@ public:
         else
         {
           // Start at last pose
-          next_pose = path.back();
+          next_pose = path.poses.back();
         }
 
         // Generate next pose
@@ -413,7 +397,7 @@ public:
         yaw += dt * vel_th;
         next_pose.pose.orientation.z = sin(yaw / 2.0);
         next_pose.pose.orientation.w = cos(yaw / 2.0);
-        path.push_back(next_pose);
+        path.poses.push_back(next_pose);
 
         // Check next pose for collision
         tf2::doTransform(next_pose, next_pose, base_to_odom);
@@ -428,42 +412,10 @@ public:
       }
     }
 
-    ROS_ERROR("No pose in path was reachable");
-    return false;
-  }
-
-  /**
-   * @brief Check if the goal pose has been achieved by the local planner
-   * @return True if achieved, false otherwise
-   */
-  virtual bool isGoalReached()
-  {
-    if (!initialized_)
-    {
-      ROS_ERROR("Planner is not initialized, call initialize() before using this planner");
-      return false;
-    }
-
-    if (!costmap_ros_->getRobotPose(robot_pose_))
-    {
-      ROS_ERROR("Could not get the robot pose");
-      return false;
-    }
-
-    geometry_msgs::PoseStamped goal;
-    if (!planner_util_.getGoal(goal))
-    {
-      ROS_ERROR("Unable to get goal");
-      return false;
-    }
-
-    double dist = std::hypot(goal.pose.position.x - robot_pose_.pose.position.x,
-                             goal.pose.position.y - robot_pose_.pose.position.y);
-
-    double angle = angles::shortest_angular_distance(tf2::getYaw(goal.pose.orientation),
-                                                     tf2::getYaw(robot_pose_.pose.orientation));
-
-    return (dist < xy_goal_tolerance_) && (fabs(angle) < yaw_goal_tolerance_);
+    RCLCPP_ERROR(logger_, "No pose in path was reachable");
+    cmd_vel.twist.linear.x = 0.0;
+    cmd_vel.twist.angular.z = 0.0;
+    return cmd_vel;
   }
 
   /**
@@ -471,53 +423,43 @@ public:
    * @param plan The plan to pass to the local planner
    * @return True if the plan was updated successfully, false otherwise
    */
-  virtual bool setPlan(const std::vector<geometry_msgs::PoseStamped>& plan)
+  virtual void setPlan(const nav_msgs::msg::Path & path) override
   {
-    if (!initialized_)
-    {
-      ROS_ERROR("Planner is not initialized, call initialize() before using this planner");
-      return false;
-    }
-
     // We need orientations on our poses
-    std::vector<geometry_msgs::PoseStamped> oriented_plan;
-    oriented_plan.resize(plan.size());
+    nav_msgs::msg::Path oriented_plan;
+    oriented_plan.poses.resize(path.poses.size());
 
     // Copy the only oriented pose
-    oriented_plan.back() = plan.back();
+    oriented_plan.poses.back() = path.poses.back();
 
     // For each pose, point at the next one
-    for (size_t i = 0; i < oriented_plan.size() - 1; ++i)
+    for (size_t i = 0; i < oriented_plan.poses.size() - 1; ++i)
     {
-      oriented_plan[i] = plan[i];
-      double dx = plan[i+1].pose.position.x - plan[i].pose.position.x;
-      double dy = plan[i+1].pose.position.y - plan[i].pose.position.y;
+      oriented_plan.poses[i] = path.poses[i];
+      double dx = path.poses[i+1].pose.position.x - path.poses[i].pose.position.x;
+      double dy = path.poses[i+1].pose.position.y - path.poses[i].pose.position.y;
       double yaw = std::atan2(dy, dx);
-      oriented_plan[i].pose.orientation.z = sin(yaw / 2.0);
-      oriented_plan[i].pose.orientation.w = cos(yaw / 2.0);
+      oriented_plan.poses[i].pose.orientation.z = sin(yaw / 2.0);
+      oriented_plan.poses[i].pose.orientation.w = cos(yaw / 2.0);
     }
 
     // TODO: filter noisy orientations?
 
-    if (planner_util_.setPlan(oriented_plan))
-    {
-      has_new_path_ = true;
-      ROS_INFO("Recieved a new path with %lu points", oriented_plan.size());
-      return true;
-    }
-
-    // Signal error
-    return false;
+    global_plan_ = oriented_plan;
+    has_new_path_ = true;
+    RCLCPP_INFO(logger_, "Recieved a new path with %lu points", oriented_plan.poses.size());
   }
 
   /**
    * @brief Rotate the robot towards a goal.
    * @param pose The pose should always be in base frame!
+   * @param velocity The current robot velocity
    * @param cmd_vel The returned command velocity
    * @returns The computed angular error.
    */
-  double rotateTowards(const geometry_msgs::PoseStamped& pose,
-                       geometry_msgs::Twist& cmd_vel)
+  double rotateTowards(const geometry_msgs::msg::PoseStamped& pose,
+                       const geometry_msgs::msg::Twist& velocity,
+                       geometry_msgs::msg::TwistStamped& cmd_vel)
   {
     // Determine error
     double yaw = 0.0;
@@ -533,30 +475,28 @@ public:
       yaw = tf2::getYaw(pose.pose.orientation);
     }
 
-    ROS_DEBUG("Rotating towards goal, error = %f", yaw);
+    RCLCPP_DEBUG(logger_, "Rotating towards goal, error = %f", yaw);
 
     // Determine max velocity based on current speed
     double max_vel_th = max_vel_theta_;
-    if (!odom_helper_.getOdomTopic().empty())
+    if (acc_dt_ > 0.0)
     {
-      geometry_msgs::PoseStamped robot_velocity;
-      odom_helper_.getRobotVel(robot_velocity);
-      double abs_vel = fabs(tf2::getYaw(robot_velocity.pose.orientation));
+      double abs_vel = fabs(velocity.angular.z);
       double acc_limited = abs_vel + (acc_lim_theta_ * acc_dt_);
       max_vel_th = std::min(max_vel_th, acc_limited);
       max_vel_th = std::max(max_vel_th, min_in_place_vel_theta_);
     }
 
-    cmd_vel.linear.x = 0.0;
-    cmd_vel.angular.z = 2 * acc_lim_theta_ * fabs(yaw);
-    cmd_vel.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
+    cmd_vel.twist.linear.x = 0.0;
+    cmd_vel.twist.angular.z = 2 * acc_lim_theta_ * fabs(yaw);
+    cmd_vel.twist.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.twist.angular.z));
 
     // Return error
     return yaw;
   }
 
 private:
-  void velocityCallback(const std_msgs::Float32::ConstPtr& max_vel_x)
+  void velocityCallback(const std_msgs::msg::Float32::SharedPtr max_vel_x)
   {
     // Lock the mutex
     std::lock_guard<std::mutex> lock(config_mutex_);
@@ -564,20 +504,23 @@ private:
     max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
   }
 
-  ros::Publisher global_plan_pub_, local_plan_pub_;
-  ros::Subscriber max_vel_sub_;
+  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
+  rclcpp::Clock::SharedPtr clock_;
+  rclcpp::Logger logger_{rclcpp::get_logger("GracefulController")};
+  std::string name_;
+
+  std::shared_ptr<LifecyclePublisher<nav_msgs::msg::Path>> global_plan_pub_;
+  std::shared_ptr<LifecyclePublisher<nav_msgs::msg::Path>> local_plan_pub_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr max_vel_sub_;
 
   bool initialized_;
   GracefulControllerPtr controller_;
 
-  tf2_ros::Buffer* buffer_;
-  costmap_2d::Costmap2DROS* costmap_ros_;
-  base_local_planner::LocalPlannerUtil planner_util_;
-  base_local_planner::OdometryHelperRos odom_helper_;
+  std::shared_ptr<tf2_ros::Buffer> buffer_;
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
 
-  // Parameters and dynamic reconfigure
+  // Parameters
   std::mutex config_mutex_;
-  dynamic_reconfigure::Server<GracefulControllerConfig> *dsrv_;
   double max_vel_x_;
   double min_vel_x_;
   double max_vel_theta_;
@@ -586,7 +529,6 @@ private:
   double acc_lim_x_;
   double acc_lim_theta_;
   double xy_goal_tolerance_;
-  double yaw_goal_tolerance_;
   double max_lookahead_;
   double resolution_;
   double acc_dt_;
@@ -595,10 +537,10 @@ private:
   double initial_rotate_tolerance_;
   bool has_new_path_;
 
-  geometry_msgs::PoseStamped robot_pose_;
+  nav_msgs::msg::Path global_plan_;
 };
 
 }  // namespace graceful_controller
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(graceful_controller::GracefulControllerROS, nav_core::BaseLocalPlanner)
+#include "pluginlib/class_list_macros.hpp"
+PLUGINLIB_EXPORT_CLASS(graceful_controller::GracefulControllerROS, nav2_core::Controller)
