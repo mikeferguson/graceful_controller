@@ -137,7 +137,6 @@ public:
     yaw_goal_tolerance_ = config.yaw_goal_tolerance;
     min_in_place_vel_theta_ = config.min_in_place_vel_theta;
     max_lookahead_ = config.max_lookahead;
-    initial_rotate_ = config.initial_rotate;
     initial_rotate_tolerance_ = config.initial_rotate_tolerance;
     resolution_ = planner_util_.getCostmap()->getResolution();
 
@@ -235,7 +234,7 @@ public:
       // Transform pose into base_link
       tf2::doTransform(pose, pose, odom_to_base);
 
-      if (has_new_path_ && initial_rotate_)
+      if (has_new_path_ && initial_rotate_tolerance_ > 0.0)
       {
         // Rotate towards goal
         if (fabs(rotateTowards(pose, cmd_vel)) < initial_rotate_tolerance_)
@@ -473,7 +472,6 @@ private:
   double resolution_;
 
   // Controls initial rotation towards path
-  bool initial_rotate_;
   double initial_rotate_tolerance_;
   bool has_new_path_;
 
