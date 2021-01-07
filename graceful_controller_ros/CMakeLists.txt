@@ -42,6 +42,11 @@ catkin_package(
     graceful_controller_ros
 )
 
+if (CATKIN_ENABLE_TESTING AND ENABLE_COVERAGE_TESTING)
+  find_package(code_coverage REQUIRED)
+  APPEND_COVERAGE_COMPILER_FLAGS()
+endif()
+
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
@@ -56,8 +61,26 @@ add_dependencies(graceful_controller_ros
   ${catkin_EXPORTED_TARGETS}
 )
 
-if (CATKIN_ENABLE_TESTING)
-  # TODO
+if(CATKIN_ENABLE_TESTING)
+  find_package(rostest)
+
+  add_executable(graceful_controller_tests
+    test/graceful_controller_tests.cpp
+  )
+  target_link_libraries(graceful_controller_tests
+    ${catkin_LIBRARIES}
+    ${GTEST_LIBRARIES}
+  )
+  add_dependencies(tests graceful_controller_tests)
+  add_rostest(test/graceful_controller.test)
+
+  if(ENABLE_COVERAGE_TESTING)
+    set(COVERAGE_EXCLUDES "*/${PROJECT_NAME}/test*")
+    add_code_coverage(
+      NAME ${PROJECT_NAME}_coverage_report
+      DEPENDS tests
+    )
+  endif()
 endif()
 
 install(TARGETS graceful_controller_ros
