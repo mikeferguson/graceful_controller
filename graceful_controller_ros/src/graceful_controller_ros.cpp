@@ -47,6 +47,7 @@
 #include <base_local_planner/goal_functions.h>
 #include <base_local_planner/odometry_helper_ros.h>
 #include <graceful_controller/graceful_controller.hpp>
+#include <std_msgs/Float32.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
@@ -89,6 +90,15 @@ public:
       costmap_ros_ = costmap_ros;
       costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
       planner_util_.initialize(tf, costmap, costmap_ros_->getGlobalFrameID());
+
+      bool use_vel_topic = false;
+      private_nh.getParam("use_vel_topic", use_vel_topic);
+      if (use_vel_topic)
+      {
+        ros::NodeHandle nh;
+        max_vel_sub_ = nh.subscribe<std_msgs::Float32>("max_vel_x", 1,
+                         boost::bind(&GracefulControllerROS::velocityCallback, this, _1));
+      }
 
       initialized_ = true;
 
@@ -454,7 +464,18 @@ public:
   }
 
 private:
+  void velocityCallback(const std_msgs::Float32::ConstPtr& max_vel_x)
+  {
+    // Lock the mutex
+    std::lock_guard<std::mutex> lock(config_mutex_);
+
+    base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
+    double vel = std::max(std::min(static_cast<double>(max_vel_x->data), limits.max_vel_x), limits.min_vel_x);
+    controller_->setVelocityLimits(limits.min_vel_x, vel, limits.max_vel_theta);
+  }
+
   ros::Publisher global_plan_pub_, local_plan_pub_;
+  ros::Subscriber max_vel_sub_;
 
   bool initialized_;
   GracefulControllerPtr controller_;

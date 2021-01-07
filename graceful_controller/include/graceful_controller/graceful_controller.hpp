@@ -35,7 +35,7 @@ public:
    * @param k2 How quickly we converge to the slow manifold.
    * @param min_velocity The minimum velocity in the linear direction.
    * @param max_velocity The maximum velocity in the linear direction.
-   * @param max_velocity The maximum velocity in the linear direction.
+   * @param max_accel The maximum acceleration in the linear direction.
    * @param max_angular_velocity The maximum velocity in the linear direction.
    */
   GracefulController(double k1,
@@ -60,6 +60,16 @@ public:
    */
   bool approach(const double x, const double y, const double theta,
                 double& vel_x, double& vel_th);
+
+  /**
+   * @brief Update the velocity limits.
+   * @param min_velocity The minimum velocity in the linear direction.
+   * @param max_velocity The maximum velocity in the linear direction.
+   * @param max_angular_velocity The maximum velocity in the linear direction.
+   */
+  void setVelocityLimits(const double min_velocity,
+                         const double max_velocity,
+                         const double max_angular_velocity);
 
 private:
   /*
