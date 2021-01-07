@@ -86,4 +86,14 @@ bool GracefulController::approach(const double x, const double y, const double t
   return true;
 }
 
+void GracefulController::setVelocityLimits(
+  const double min_velocity,
+  const double max_velocity,
+  const double max_angular_velocity)
+{
+  min_velocity_ = min_velocity;
+  max_velocity_ = max_velocity;
+  max_angular_velocity_ = max_angular_velocity;
+}
+
 }  // namespace graceful_controller
