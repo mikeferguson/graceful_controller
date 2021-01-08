@@ -13,6 +13,7 @@ GracefulControllerROS:
   initial_rotate_tolerance: 0.25
 
   use_vel_topic: true
+  odom_topic: "odom"
 
 costmap:
   global_frame: odom

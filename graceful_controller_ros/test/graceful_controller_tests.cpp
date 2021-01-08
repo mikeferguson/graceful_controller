@@ -156,6 +156,12 @@ public:
     max_vel_pub_.publish(msg);
   }
 
+  void setSimVelocity(double x, double th)
+  {
+    odom_.twist.twist.linear.x = x;
+    odom_.twist.twist.angular.z = th;
+  }
+
   void setSimCommand(geometry_msgs::Twist& command)
   {
     command_ = command;
@@ -237,15 +243,34 @@ TEST(ControllerTests, test_basic_plan)
   // Expect max velocity forward
   geometry_msgs::Twist command;
   EXPECT_TRUE(controller->computeVelocityCommands(command));
-  EXPECT_EQ(command.linear.x, 1.0);
+  // Odom reports velocity = 0, so max = acc * 0.25 = 0.5 * 0.25
+  EXPECT_EQ(command.linear.x, 0.125);
   EXPECT_EQ(command.angular.z, 0.0);
 
   // Set a new max velocity by topic
   fixture.setMaxVelocity(0.5);
   ros::Duration(0.25).sleep();
 
+  // Odom still reports 0, so max remains the same
+  EXPECT_TRUE(controller->computeVelocityCommands(command));
+  EXPECT_EQ(command.linear.x, 0.125);
+  EXPECT_EQ(command.angular.z, 0.0);
+
+  // Now lie about velocity
+  fixture.setSimVelocity(1.0, 0.0);
+  ros::Duration(0.25).sleep();
+
+  // Odom still reports 1.0, but max_vel_x topic is 0.5
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 0.5);
+  EXPECT_EQ(command.angular.z, 0.0);
+
+  // Bump our current speed up
+  fixture.setMaxVelocity(1.0);
+  ros::Duration(0.25).sleep();
+
+  EXPECT_TRUE(controller->computeVelocityCommands(command));
+  EXPECT_EQ(command.linear.x, 1.0);
   EXPECT_EQ(command.angular.z, 0.0);
 }
 
@@ -287,11 +312,25 @@ TEST(ControllerTests, test_rotate_in_place)
   plan.push_back(pose);
   EXPECT_TRUE(controller->setPlan(plan));
 
+  // Set our velocity to 0
+  fixture.setSimVelocity(0.0, 0.0);
+  ros::Duration(0.25).sleep();
+
   // Expect max rotation
   geometry_msgs::Twist command;
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 0.0);
-  EXPECT_EQ(command.angular.z, 2.5);
+  // Odom reports velocity = 0, so max = acc * 0.25 = 1.0 * 0.25
+  EXPECT_EQ(command.angular.z, 0.25);
+
+  // Set our velocity to 1.0
+  fixture.setSimVelocity(0.0, 1.0);
+  ros::Duration(0.25).sleep();
+
+  // Expect max rotation
+  EXPECT_TRUE(controller->computeVelocityCommands(command));
+  EXPECT_EQ(command.linear.x, 0.0);
+  EXPECT_EQ(command.angular.z, 1.25);
 }
 
 TEST(ControllerTests, test_collision_check)
@@ -311,7 +350,7 @@ TEST(ControllerTests, test_collision_check)
   plan.push_back(pose);
   EXPECT_TRUE(controller->setPlan(plan));
 
-  // Expect max rotation
+  // Expect no command
   geometry_msgs::Twist command;
   EXPECT_FALSE(controller->computeVelocityCommands(command));
 }
