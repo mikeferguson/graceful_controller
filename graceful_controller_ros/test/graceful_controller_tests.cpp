@@ -240,11 +240,14 @@ TEST(ControllerTests, test_basic_plan)
   plan.push_back(pose);
   EXPECT_TRUE(controller->setPlan(plan));
 
-  // Expect max velocity forward
+  // Set velocity to 0
+  fixture.setSimVelocity(0.0, 0.0);
+  ros::Duration(0.25).sleep();
+
+  // Odom reports velocity = 0, but min_vel_x is greater than acc_lim * acc_dt
   geometry_msgs::Twist command;
   EXPECT_TRUE(controller->computeVelocityCommands(command));
-  // Odom reports velocity = 0, so max = acc * 0.25 = 0.5 * 0.25
-  EXPECT_EQ(command.linear.x, 0.125);
+  EXPECT_EQ(command.linear.x, 0.25);
   EXPECT_EQ(command.angular.z, 0.0);
 
   // Set a new max velocity by topic
@@ -253,14 +256,14 @@ TEST(ControllerTests, test_basic_plan)
 
   // Odom still reports 0, so max remains the same
   EXPECT_TRUE(controller->computeVelocityCommands(command));
-  EXPECT_EQ(command.linear.x, 0.125);
+  EXPECT_EQ(command.linear.x, 0.25);
   EXPECT_EQ(command.angular.z, 0.0);
 
   // Now lie about velocity
   fixture.setSimVelocity(1.0, 0.0);
   ros::Duration(0.25).sleep();
 
-  // Odom still reports 1.0, but max_vel_x topic is 0.5
+  // Odom now reports 1.0, but max_vel_x topic is 0.5
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 0.5);
   EXPECT_EQ(command.angular.z, 0.0);
@@ -269,6 +272,16 @@ TEST(ControllerTests, test_basic_plan)
   fixture.setMaxVelocity(1.0);
   ros::Duration(0.25).sleep();
 
+  // Expect max velocity
+  EXPECT_TRUE(controller->computeVelocityCommands(command));
+  EXPECT_EQ(command.linear.x, 1.0);
+  EXPECT_EQ(command.angular.z, 0.0);
+
+  // Report velocity over limits
+  fixture.setSimVelocity(3.0, 0.0);
+  ros::Duration(0.25).sleep();
+
+  // Expect max velocity
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 1.0);
   EXPECT_EQ(command.angular.z, 0.0);
@@ -316,21 +329,29 @@ TEST(ControllerTests, test_rotate_in_place)
   fixture.setSimVelocity(0.0, 0.0);
   ros::Duration(0.25).sleep();
 
-  // Expect max rotation
+  // Odom reports velocity = 0, but min_in_place_vel_theta is 0.6
   geometry_msgs::Twist command;
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 0.0);
-  // Odom reports velocity = 0, so max = acc * 0.25 = 1.0 * 0.25
-  EXPECT_EQ(command.angular.z, 0.25);
+  EXPECT_EQ(command.angular.z, 0.6);
 
   // Set our velocity to 1.0
   fixture.setSimVelocity(0.0, 1.0);
   ros::Duration(0.25).sleep();
 
-  // Expect max rotation
+  // Expect limited rotation command
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 0.0);
   EXPECT_EQ(command.angular.z, 1.25);
+
+  // Report velocity over limits
+  fixture.setSimVelocity(0.0, 4.0);
+  ros::Duration(0.25).sleep();
+
+  // Expect max rotation
+  EXPECT_TRUE(controller->computeVelocityCommands(command));
+  EXPECT_EQ(command.linear.x, 0.0);
+  EXPECT_EQ(command.angular.z, 2.5);
 }
 
 TEST(ControllerTests, test_collision_check)

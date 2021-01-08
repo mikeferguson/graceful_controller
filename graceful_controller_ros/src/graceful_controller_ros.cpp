@@ -487,6 +487,7 @@ public:
       double abs_vel = fabs(tf2::getYaw(robot_velocity.pose.orientation));
       double acc_limited = abs_vel + (limits.acc_lim_theta * acc_dt_);
       max_vel_th = std::min(max_vel_th, acc_limited);
+      max_vel_th = std::max(max_vel_th, min_in_place_vel_theta_);
     }
 
     cmd_vel.linear.x = 0.0;

@@ -1,6 +1,6 @@
 GracefulControllerROS:
   max_vel_x: 1.0
-  min_vel_x: 0.1
+  min_vel_x: 0.25
 
   max_vel_theta: 2.5
   min_vel_theta: 0.3
