@@ -42,6 +42,7 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
 #include <pluginlib/class_loader.hpp>
+#include <std_msgs/Float32.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/utils.h>
@@ -64,6 +65,7 @@ public:
     // ROS topics to run the test
     map_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("/map", 1, true /* latch */);
     odom_pub_ = nh.advertise<nav_msgs::Odometry>("/odom", 1);
+    max_vel_pub_ = nh.advertise<std_msgs::Float32>("/max_vel_x", 1, true /* latch */);
 
     // Need to start publishing odom before we initialize the costmap
     resetMap();
@@ -147,6 +149,13 @@ public:
     odom_.pose.pose.orientation.w = 1.0;
   }
 
+  void setMaxVelocity(float velocity)
+  {
+    std_msgs::Float32 msg;
+    msg.data = velocity;
+    max_vel_pub_.publish(msg);
+  }
+
   void setSimCommand(geometry_msgs::Twist& command)
   {
     command_ = command;
@@ -199,7 +208,7 @@ protected:
   tf2_ros::TransformListener listener_;
   tf2_ros::TransformBroadcaster broadcaster_;
   costmap_2d::Costmap2DROS* costmap_ros_;
-  ros::Publisher map_pub_, odom_pub_;
+  ros::Publisher map_pub_, odom_pub_, max_vel_pub_;
   nav_msgs::OccupancyGrid map_;
   nav_msgs::Odometry odom_;
   geometry_msgs::Twist command_;
@@ -231,12 +240,12 @@ TEST(ControllerTests, test_basic_plan)
   EXPECT_EQ(command.linear.x, 1.0);
   EXPECT_EQ(command.angular.z, 0.0);
 
-  EXPECT_TRUE(controller->computeVelocityCommands(command));
-  EXPECT_EQ(command.linear.x, 1.0);
-  EXPECT_EQ(command.angular.z, 0.0);
+  // Set a new max velocity by topic
+  fixture.setMaxVelocity(0.5);
+  ros::Duration(0.25).sleep();
 
   EXPECT_TRUE(controller->computeVelocityCommands(command));
-  EXPECT_EQ(command.linear.x, 1.0);
+  EXPECT_EQ(command.linear.x, 0.5);
   EXPECT_EQ(command.angular.z, 0.0);
 }
 

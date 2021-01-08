@@ -12,6 +12,8 @@ GracefulControllerROS:
   max_lookahead: 1.0
   initial_rotate_tolerance: 0.25
 
+  use_vel_topic: true
+
 costmap:
   global_frame: odom
   robot_base_frame: base_link
