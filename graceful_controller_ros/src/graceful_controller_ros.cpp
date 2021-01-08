@@ -91,6 +91,13 @@ public:
       costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
       planner_util_.initialize(tf, costmap, costmap_ros_->getGlobalFrameID());
 
+      std::string odom_topic;
+      if (private_nh.getParam("odom_topic", odom_topic))
+      {
+        odom_helper_.setOdomTopic(odom_topic);
+        private_nh.param("acc_dt", acc_dt_, 0.25);
+      }
+
       bool use_vel_topic = false;
       private_nh.getParam("use_vel_topic", use_vel_topic);
       if (use_vel_topic)
@@ -149,6 +156,9 @@ public:
     max_lookahead_ = config.max_lookahead;
     initial_rotate_tolerance_ = config.initial_rotate_tolerance;
     resolution_ = planner_util_.getCostmap()->getResolution();
+
+    // Note: calling dynamic reconfigure will override velocity topic
+    max_vel_x_ = config.max_vel_x;
 
     controller_ = std::make_shared<GracefulController>(config.k1,
                                                        config.k2,
@@ -256,6 +266,18 @@ public:
         {
           return true;
         }
+      }
+
+      // Configure controller max velocity based on current speed
+      if (!odom_helper_.getOdomTopic().empty())
+      {
+        base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
+        geometry_msgs::PoseStamped robot_velocity;
+        odom_helper_.getRobotVel(robot_velocity);
+        double max_vel_x = robot_velocity.pose.position.x + (limits.acc_lim_x * acc_dt_);
+        max_vel_x = std::min(max_vel_x, max_vel_x_);
+        max_vel_x = std::max(max_vel_x, limits.min_vel_x);
+        controller_->setVelocityLimits(limits.min_vel_x, max_vel_x, limits.max_vel_theta);
       }
 
       // Simulated path (for debugging/visualization)
@@ -456,9 +478,21 @@ public:
     // Get limits so we can compute velocity
     base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
 
+    // Determine max velocity based on current speed
+    double max_vel_th = limits.max_vel_theta;
+    if (!odom_helper_.getOdomTopic().empty())
+    {
+      geometry_msgs::PoseStamped robot_velocity;
+      odom_helper_.getRobotVel(robot_velocity);
+      double abs_vel = fabs(tf2::getYaw(robot_velocity.pose.orientation));
+      double acc_limited = abs_vel + (limits.acc_lim_theta * acc_dt_);
+      max_vel_th = std::min(max_vel_th, acc_limited);
+      max_vel_th = std::max(max_vel_th, min_in_place_vel_theta_);
+    }
+
     cmd_vel.linear.x = 0.0;
     cmd_vel.angular.z = sqrt(2 * limits.acc_lim_theta * fabs(yaw));
-    cmd_vel.angular.z = sign(yaw) * std::min(limits.max_vel_theta, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
+    cmd_vel.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
 
     // Return error
     return yaw;
@@ -471,8 +505,7 @@ private:
     std::lock_guard<std::mutex> lock(config_mutex_);
 
     base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
-    double vel = std::max(std::min(static_cast<double>(max_vel_x->data), limits.max_vel_x), limits.min_vel_x);
-    controller_->setVelocityLimits(limits.min_vel_x, vel, limits.max_vel_theta);
+    max_vel_x_ = std::max(std::min(static_cast<double>(max_vel_x->data), limits.max_vel_x), limits.min_vel_x);
   }
 
   ros::Publisher global_plan_pub_, local_plan_pub_;
@@ -484,14 +517,18 @@ private:
   tf2_ros::Buffer* buffer_;
   costmap_2d::Costmap2DROS* costmap_ros_;
   base_local_planner::LocalPlannerUtil planner_util_;
+  base_local_planner::OdometryHelperRos odom_helper_;
 
+  // Parameters and dynamic reconfigure
   std::mutex config_mutex_;
   dynamic_reconfigure::Server<GracefulControllerConfig> *dsrv_;
+  double max_vel_x_;
   double min_in_place_vel_theta_;
   double xy_goal_tolerance_;
   double yaw_goal_tolerance_;
   double max_lookahead_;
   double resolution_;
+  double acc_dt_;
 
   // Controls initial rotation towards path
   double initial_rotate_tolerance_;
