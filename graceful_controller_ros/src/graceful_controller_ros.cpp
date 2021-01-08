@@ -252,95 +252,96 @@ public:
           ROS_INFO("Done rotating towards path");
           has_new_path_ = false;
         }
-        return true;
-      }
-      else
-      {
-        // Simulated path (for debugging/visualization)
-        std::vector<geometry_msgs::PoseStamped> path;
-        // Get control and path, iteratively
-        while (true)
+        else
         {
-          // The error between current robot pose and the lookahead goal
-          geometry_msgs::PoseStamped error = pose;
+          return true;
+        }
+      }
 
-          // Extract error_angle
-          double error_angle = tf2::getYaw(error.pose.orientation);
+      // Simulated path (for debugging/visualization)
+      std::vector<geometry_msgs::PoseStamped> path;
+      // Get control and path, iteratively
+      while (true)
+      {
+        // The error between current robot pose and the lookahead goal
+        geometry_msgs::PoseStamped error = pose;
 
-          // Move origin to our current simulated pose
-          if (!path.empty())
-          {
-            double x = error.pose.position.x - path.back().pose.position.x;
-            double y = error.pose.position.y - path.back().pose.position.y;
+        // Extract error_angle
+        double error_angle = tf2::getYaw(error.pose.orientation);
 
-            double theta = -tf2::getYaw(path.back().pose.orientation);
-            error.pose.position.x = x * cos(theta) - y * sin(theta);
-            error.pose.position.y = y * cos(theta) + x * sin(theta);
+        // Move origin to our current simulated pose
+        if (!path.empty())
+        {
+          double x = error.pose.position.x - path.back().pose.position.x;
+          double y = error.pose.position.y - path.back().pose.position.y;
 
-            error_angle += theta;
-            error.pose.orientation.z = sin(error_angle / 2.0);
-            error.pose.orientation.w = cos(error_angle / 2.0);
-          }
+          double theta = -tf2::getYaw(path.back().pose.orientation);
+          error.pose.position.x = x * cos(theta) - y * sin(theta);
+          error.pose.position.y = y * cos(theta) + x * sin(theta);
 
-          // Compute commands
-          double vel_x, vel_th;
-          if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle,
-                                     vel_x, vel_th))
-          {
-            ROS_ERROR("Unable to compute approach");
-            return false;
-          }
+          error_angle += theta;
+          error.pose.orientation.z = sin(error_angle / 2.0);
+          error.pose.orientation.w = cos(error_angle / 2.0);
+        }
 
-          if (path.empty())
-          {
-            cmd_vel.linear.x = vel_x;
-            cmd_vel.angular.z = vel_th;
-          }
-          else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
-          {
-            // We have reached lookahead goal without collision
-            base_local_planner::publishPlan(path, local_plan_pub_);
-            return true;
-          }
+        // Compute commands
+        double vel_x, vel_th;
+        if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle,
+                                   vel_x, vel_th))
+        {
+          ROS_ERROR("Unable to compute approach");
+          return false;
+        }
 
-          // Forward simulate command
-          geometry_msgs::PoseStamped next_pose;
-          next_pose.header.frame_id = costmap_ros_->getBaseFrameID();
-          if (path.empty())
-          {
-            // Initialize at origin
-            next_pose.pose.orientation.w = 1.0;
-          }
-          else
-          {
-            // Start at last pose
-            next_pose = path.back();
-          }
+        if (path.empty())
+        {
+          cmd_vel.linear.x = vel_x;
+          cmd_vel.angular.z = vel_th;
+        }
+        else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
+        {
+          // We have reached lookahead goal without collision
+          base_local_planner::publishPlan(path, local_plan_pub_);
+          return true;
+        }
 
-          // Generate next pose
-          double dt = resolution_ / vel_x;
-          double yaw = tf2::getYaw(next_pose.pose.orientation);
-          next_pose.pose.position.x += dt * vel_x * cos(yaw);
-          next_pose.pose.position.y += dt * vel_x * sin(yaw);
-          yaw += dt * vel_th;
-          next_pose.pose.orientation.z = sin(yaw / 2.0);
-          next_pose.pose.orientation.w = cos(yaw / 2.0);
-          path.push_back(next_pose);
+        // Forward simulate command
+        geometry_msgs::PoseStamped next_pose;
+        next_pose.header.frame_id = costmap_ros_->getBaseFrameID();
+        if (path.empty())
+        {
+          // Initialize at origin
+          next_pose.pose.orientation.w = 1.0;
+        }
+        else
+        {
+          // Start at last pose
+          next_pose = path.back();
+        }
 
-          // Check next pose for collision
-          tf2::doTransform(next_pose, next_pose, base_to_odom);
-          unsigned mx, my;
-          if (!planner_util_.getCostmap()->worldToMap(next_pose.pose.position.x, next_pose.pose.position.y, mx, my))
-          {
-            ROS_DEBUG("Path is off costmap (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
-            break;
-          }
-          if (planner_util_.getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
-          {
-            // Collision - can't go this far!
-            ROS_DEBUG("Collision along path at (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
-            break;
-          }
+        // Generate next pose
+        double dt = resolution_ / vel_x;
+        double yaw = tf2::getYaw(next_pose.pose.orientation);
+        next_pose.pose.position.x += dt * vel_x * cos(yaw);
+        next_pose.pose.position.y += dt * vel_x * sin(yaw);
+        yaw += dt * vel_th;
+        next_pose.pose.orientation.z = sin(yaw / 2.0);
+        next_pose.pose.orientation.w = cos(yaw / 2.0);
+        path.push_back(next_pose);
+
+        // Check next pose for collision
+        tf2::doTransform(next_pose, next_pose, base_to_odom);
+        unsigned mx, my;
+        if (!planner_util_.getCostmap()->worldToMap(next_pose.pose.position.x, next_pose.pose.position.y, mx, my))
+        {
+          ROS_DEBUG("Path is off costmap (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
+          break;
+        }
+        if (planner_util_.getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
+        {
+          // Collision - can't go this far!
+          ROS_DEBUG("Collision along path at (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
+          break;
         }
       }
     }
