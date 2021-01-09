@@ -254,20 +254,6 @@ public:
       // Transform pose into base_link
       tf2::doTransform(pose, pose, odom_to_base);
 
-      if (has_new_path_ && initial_rotate_tolerance_ > 0.0)
-      {
-        // Rotate towards goal
-        if (fabs(rotateTowards(pose, cmd_vel)) < initial_rotate_tolerance_)
-        {
-          ROS_INFO("Done rotating towards path");
-          has_new_path_ = false;
-        }
-        else
-        {
-          return true;
-        }
-      }
-
       // Configure controller max velocity based on current speed
       if (!odom_helper_.getOdomTopic().empty())
       {
@@ -322,6 +308,21 @@ public:
         }
         else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
         {
+          if (has_new_path_ && initial_rotate_tolerance_ > 0.0)
+          {
+            // Rotate towards goal
+            geometry_msgs::Twist rotation;
+            if (fabs(rotateTowards(pose, rotation)) < initial_rotate_tolerance_)
+            {
+              ROS_INFO("Done rotating towards path");
+              has_new_path_ = false;
+            }
+            else
+            {
+              cmd_vel = rotation;
+            }
+          }
+
           // We have reached lookahead goal without collision
           base_local_planner::publishPlan(path, local_plan_pub_);
           return true;

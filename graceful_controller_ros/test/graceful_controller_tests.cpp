@@ -386,6 +386,42 @@ TEST(ControllerTests, test_initial_rotate_in_place)
   EXPECT_EQ(command.angular.z, 2.5);
 }
 
+TEST(ControllerTests, test_final_rotate_in_place)
+{
+  ControllerFixture fixture;
+  ASSERT_TRUE(fixture.setup());
+  boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
+
+  std::vector<geometry_msgs::PoseStamped> plan;
+  geometry_msgs::PoseStamped pose;
+  pose.header.frame_id = "map";
+  pose.pose.orientation.w = 1.0;
+  pose.pose.position.x = 0.5;
+  pose.pose.position.y = 0.0;
+  plan.push_back(pose);
+  EXPECT_TRUE(controller->setPlan(plan));
+
+  // Set pose to start
+  fixture.setPose(0.1, 0.0, 0.0);
+  ros::Duration(0.25).sleep();
+
+  // Expect forward motion at min velocity since we are aligned with only goal pose
+  geometry_msgs::Twist command;
+  EXPECT_TRUE(controller->computeVelocityCommands(command));
+  EXPECT_EQ(command.linear.x, 0.25);
+  EXPECT_EQ(command.angular.z, 0.0);
+
+  // Set our pose to the end goal, but with bad heading
+  fixture.setPose(0.5, 0.0, 1.57);
+  ros::Duration(0.25).sleep();
+
+  // Expect limited rotation command
+  EXPECT_TRUE(controller->computeVelocityCommands(command));
+  EXPECT_EQ(command.linear.x, 0.0);
+  EXPECT_EQ(command.angular.z, -0.6);
+  EXPECT_FALSE(controller->isGoalReached());
+}
+
 TEST(ControllerTests, test_collision_check)
 {
   ControllerFixture fixture;
