@@ -58,7 +58,7 @@ public:
   {
   }
 
-  bool setup()
+  bool setup(bool intialize = true)
   {
     ros::NodeHandle nh("~");
 
@@ -79,13 +79,16 @@ public:
     try
     {
       controller_ = loader_.createInstance("graceful_controller/GracefulControllerROS");
-      controller_->initialize(loader_.getName("graceful_controller/GracefulControllerROS"),
-                              &buffer_, costmap_ros_);
     }
     catch (const pluginlib::PluginlibException& ex)
     {
       ROS_FATAL("Failed to create the controller. Exception: %s", ex.what());
       return false;
+    }
+
+    if (intialize)
+    {
+      initialize();
     }
 
     return true;
@@ -97,6 +100,12 @@ public:
     thread_->interrupt();
     thread_->join();
     delete thread_;
+  }
+
+  void initialize()
+  {
+    controller_->initialize(loader_.getName("graceful_controller/GracefulControllerROS"),
+                            &buffer_, costmap_ros_);
   }
 
   boost::shared_ptr<nav_core::BaseLocalPlanner> getController()
@@ -137,6 +146,7 @@ public:
     }
 
     map_.data[ix + (iy * map_.info.width)] = 100;
+    map_pub_.publish(map_);
     return true;
   }
 
@@ -147,6 +157,16 @@ public:
     odom_.pose.pose.position.x = 0.0;
     odom_.pose.pose.position.y = 0.0;
     odom_.pose.pose.orientation.w = 1.0;
+  }
+
+  void setPose(double x, double y, double yaw)
+  {
+    odom_.header.frame_id = "odom";
+    odom_.child_frame_id = "base_link";
+    odom_.pose.pose.position.x = x;
+    odom_.pose.pose.position.y = y;
+    odom_.pose.pose.orientation.z = sin(yaw / 2.0);
+    odom_.pose.pose.orientation.w = cos(yaw / 2.0);
   }
 
   void setMaxVelocity(float velocity)
@@ -225,19 +245,31 @@ protected:
 TEST(ControllerTests, test_basic_plan)
 {
   ControllerFixture fixture;
-  ASSERT_TRUE(fixture.setup());
+  ASSERT_TRUE(fixture.setup(false /* do not intialize */));
   boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
 
   std::vector<geometry_msgs::PoseStamped> plan;
   geometry_msgs::PoseStamped pose;
   pose.header.frame_id = "map";
   pose.pose.orientation.w = 1.0;
-  pose.pose.position.x = 0.5;
-  pose.pose.position.y = 0.0;
-  plan.push_back(pose);
   pose.pose.position.x = 1.0;
   pose.pose.position.y = 0.0;
   plan.push_back(pose);
+  pose.pose.position.x = 1.5;
+  pose.pose.position.y = 0.0;
+  plan.push_back(pose);
+
+  // Unitialized controller should not be able to plan
+  EXPECT_FALSE(controller->setPlan(plan));
+  geometry_msgs::Twist command;
+  EXPECT_FALSE(controller->computeVelocityCommands(command));
+  EXPECT_FALSE(controller->isGoalReached());
+  fixture.initialize();
+
+  // Calling multiple times should not be a problem
+  fixture.initialize();
+
+  // Now we can set the plan
   EXPECT_TRUE(controller->setPlan(plan));
 
   // Set velocity to 0
@@ -245,10 +277,10 @@ TEST(ControllerTests, test_basic_plan)
   ros::Duration(0.25).sleep();
 
   // Odom reports velocity = 0, but min_vel_x is greater than acc_lim * acc_dt
-  geometry_msgs::Twist command;
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 0.25);
   EXPECT_EQ(command.angular.z, 0.0);
+  EXPECT_FALSE(controller->isGoalReached());
 
   // Set a new max velocity by topic
   fixture.setMaxVelocity(0.5);
@@ -307,7 +339,7 @@ TEST(ControllerTests, test_out_of_range)
   EXPECT_FALSE(controller->computeVelocityCommands(command));
 }
 
-TEST(ControllerTests, test_rotate_in_place)
+TEST(ControllerTests, test_initial_rotate_in_place)
 {
   ControllerFixture fixture;
   ASSERT_TRUE(fixture.setup());
@@ -361,6 +393,7 @@ TEST(ControllerTests, test_collision_check)
   boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
 
   fixture.markMap(0.65, 0);
+  ros::Duration(0.25).sleep();
 
   std::vector<geometry_msgs::PoseStamped> plan;
   geometry_msgs::PoseStamped pose;

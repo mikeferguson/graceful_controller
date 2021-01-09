@@ -239,7 +239,7 @@ public:
     }
 
     // Work back from the end of plan
-    for (size_t i = transformed_plan.size() - 1; i > 0; --i)
+    for (int i = transformed_plan.size() - 1; i >= 0; --i)
     {
       geometry_msgs::PoseStamped pose = transformed_plan[i];
 
