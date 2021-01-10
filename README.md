@@ -13,9 +13,9 @@ reachable with our current control law parameters without collision.
 ## Example Config
 
 There is an example configuration for running this controller on the UBR1
-in ROS1 simulation on the
-[graceful_controller](https://github.com/mikeferguson/ubr_reloaded/tree/graceful_controller)
-branch.
+in ROS1 simulation in the
+[ubr_reloaded](https://github.com/mikeferguson/ubr_reloaded/tree/ros1)
+repository.
 
 ## Licensing
 
