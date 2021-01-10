@@ -492,7 +492,7 @@ public:
     }
 
     cmd_vel.linear.x = 0.0;
-    cmd_vel.angular.z = sqrt(2 * limits.acc_lim_theta * fabs(yaw));
+    cmd_vel.angular.z = 2 * limits.acc_lim_theta * fabs(yaw);
     cmd_vel.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
 
     // Return error

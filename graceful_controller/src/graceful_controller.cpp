@@ -66,7 +66,7 @@ bool GracefulController::approach(const double x, const double y, const double t
   // Compute max_velocity based on curvature
   double v = max_velocity_ / (1 + beta_ * std::pow(fabs(k), lambda_));
   // Limit velocity based on approaching target
-  double approach_limit = std::sqrt(2 * max_accel_ * r);
+  double approach_limit = 2 * max_accel_ * r;
   v = std::min(v, approach_limit);
   v = std::min(std::max(v, min_velocity_), max_velocity_);
 
