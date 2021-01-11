@@ -58,6 +58,7 @@ target_link_libraries(graceful_controller_ros
   ${catkin_LIBRARIES}
 )
 add_dependencies(graceful_controller_ros
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
 )
 
