@@ -227,9 +227,9 @@ public:
       return false;
     }
 
-    double dx = transformed_plan.back().pose.position.x - robot_pose_.pose.position.x;
-    double dy = transformed_plan.back().pose.position.y - robot_pose_.pose.position.y;
-    if (std::hypot(dx, dy) < xy_goal_tolerance_)
+    geometry_msgs::PoseStamped pose;
+     tf2::doTransform(transformed_plan.back(), pose, odom_to_base);
+    if (std::hypot(pose.pose.position.x, pose.pose.position.y) < xy_goal_tolerance_)
     {
       // XY goal tolerance reached - now just rotate towards goal
       geometry_msgs::PoseStamped goal;
@@ -241,18 +241,14 @@ public:
     // Work back from the end of plan
     for (int i = transformed_plan.size() - 1; i >= 0; --i)
     {
-      geometry_msgs::PoseStamped pose = transformed_plan[i];
+      // Transform pose into base_link
+      tf2::doTransform(transformed_plan[i], pose, odom_to_base);
 
       // Continue if this is too far away
-      dx = pose.pose.position.x - robot_pose_.pose.position.x;
-      dy = pose.pose.position.y - robot_pose_.pose.position.y;
-      if (std::hypot(dx, dy) > max_lookahead_)
+      if (std::hypot(pose.pose.position.x, pose.pose.position.y) > max_lookahead_)
       {
         continue;
       }
-
-      // Transform pose into base_link
-      tf2::doTransform(pose, pose, odom_to_base);
 
       // Configure controller max velocity based on current speed
       if (!odom_helper_.getOdomTopic().empty())
