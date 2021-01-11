@@ -39,16 +39,16 @@
 #include <cmath>
 #include <mutex>
 
-#include "angles/angles.h"
-#include "graceful_controller/graceful_controller.hpp"
-#include "nav_2d_utils/parameters.hpp"
-#include "nav_msgs/msg/path.hpp"
-#include "nav2_core/controller.hpp"
-#include "nav2_costmap_2d/footprint.h"
-#include "nav2_util/line_iterator.hpp"
-#include "std_msgs/msg/float32.hpp"
-#include "tf2/utils.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#include <angles/angles.h>
+#include <graceful_controller/graceful_controller.hpp>
+#include <nav_2d_utils/parameters.hpp>
+#include <nav_msgs/msg/path.hpp>
+#include <nav2_core/controller.hpp>
+#include <nav2_costmap_2d/footprint.h>
+#include <nav2_util/line_iterator.hpp>
+#include <std_msgs/msg/float32.hpp>
+#include <tf2/utils.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 using rclcpp_lifecycle::LifecyclePublisher;
 using nav2_util::declare_parameter_if_not_declared;
@@ -423,7 +423,7 @@ public:
    * @param plan The plan to pass to the local planner
    * @return True if the plan was updated successfully, false otherwise
    */
-  virtual void setPlan(const nav_msgs::msg::Path & path) override
+  virtual void setPlan(const nav_msgs::msg::Path& path) override
   {
     // We need orientations on our poses
     nav_msgs::msg::Path oriented_plan;

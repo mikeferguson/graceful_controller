@@ -33,9 +33,6 @@ find_package(tf2_ros REQUIRED)
 add_library(graceful_controller_ros SHARED
   src/graceful_controller_ros.cpp
 )
-target_link_libraries(graceful_controller_ros
-  ${catkin_LIBRARIES}
-)
 ament_target_dependencies(graceful_controller_ros
   angles
   geometry_msgs
@@ -52,19 +49,28 @@ ament_target_dependencies(graceful_controller_ros
   tf2_ros
 )
 
-if(CATKIN_ENABLE_TESTING)
-  #find_package(ament_cmake_gtest REQUIRED)
-  #find_package(rostest)
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
 
-  #add_executable(graceful_controller_tests
-  #  test/graceful_controller_tests.cpp
-  #)
-  #target_link_libraries(graceful_controller_tests
-  #  ${catkin_LIBRARIES}
-  #  ${GTEST_LIBRARIES}
-  #)
-  #add_dependencies(tests graceful_controller_tests)
-  #add_rostest(test/graceful_controller.test)
+  ament_add_gtest_executable(graceful_controller_tests
+    test/graceful_controller_tests.cpp
+  )
+  ament_target_dependencies(graceful_controller_tests
+    angles
+    geometry_msgs
+    graceful_controller
+    nav_2d_utils
+    nav_msgs
+    nav2_core
+    nav2_costmap_2d
+    pluginlib
+    rclcpp
+    std_msgs
+    tf2_geometry_msgs
+    tf2_ros
+  )
+
+  # TODO: run test
 endif()
 
 install(TARGETS graceful_controller_ros
