@@ -145,6 +145,8 @@ public:
     if (!initialized_)
     {
       node_ = node;
+      clock_ = node->get_clock();
+      logger_ = node->get_logger();
       buffer_ = tf;
       costmap_ros_ = costmap_ros;
       name_ = name;
@@ -262,7 +264,7 @@ public:
     try
     {
       plan_to_base = buffer_->lookupTransform(costmap_ros_->getBaseFrameID(),
-                                              costmap_ros_->getGlobalFrameID(),
+                                              global_plan_.header.frame_id,
                                               tf2::TimePointZero);
     }
     catch (tf2::TransformException& ex)
@@ -427,6 +429,7 @@ public:
   {
     // We need orientations on our poses
     nav_msgs::msg::Path oriented_plan;
+    oriented_plan.header = path.header;
     oriented_plan.poses.resize(path.poses.size());
 
     // Copy the only oriented pose
