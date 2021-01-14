@@ -43,6 +43,7 @@
 #include <nav_msgs/Path.h>
 
 #include <angles/angles.h>
+#include <base_local_planner/line_iterator.h>
 #include <base_local_planner/local_planner_util.h>
 #include <base_local_planner/goal_functions.h>
 #include <base_local_planner/odometry_helper_ros.h>
@@ -63,6 +64,12 @@ double sign(double x)
   return x < 0.0 ? -1.0 : 1.0;
 }
 
+/**
+ * @brief Collision check the robot pose
+ * @param x The robot x coordinate in costmap.global frame
+ * @param y The robot y coordinate in costmap.global frame
+ * @param theta The robot rotation in costmap.global frame
+ */
 bool isColliding(double x, double y, double theta,
                  costmap_2d::Costmap2DROS* costmap)
 {
@@ -73,15 +80,47 @@ bool isColliding(double x, double y, double theta,
     return true;
   }
 
-  // TODO: footprint
-  std::vector<geometry_msgs::Point> footprint = costmap->getRobotFootprint();
-  std::vector<geometry_msgs::Point> oriented;
-  costmap_2d::transformFootprint(x, y, theta, footprint, oriented);
+  std::vector<geometry_msgs::Point> spec = costmap->getRobotFootprint();
+  std::vector<geometry_msgs::Point> footprint;
+  costmap_2d::transformFootprint(x, y, theta, spec, footprint);
 
-  if (costmap->getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
+  // If our footprint is less than 4 corners, treat as circle
+  if (footprint.size() < 4)
   {
-    ROS_DEBUG("Collision along path at (%f,%f)", x, y);
-    return true;
+    if (costmap->getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
+    {
+      ROS_DEBUG("Collision along path at (%f,%f)", x, y);
+      return true;
+    }
+    // Done collison checking
+    return false;
+  }
+
+  // Do a complete collision check of the footprint boundary
+  for (size_t i = 0; i < footprint.size(); ++i)
+  {
+    unsigned x0, y0, x1, y1;
+    if (!costmap->getCostmap()->worldToMap(footprint[i].x, footprint[i].y, x0, y0))
+    {
+      ROS_DEBUG("Footprint point %lu is off costmap", i);
+      return true;
+    }
+
+    size_t next = (i + 1) % footprint.size();
+    if (!costmap->getCostmap()->worldToMap(footprint[next].x, footprint[next].y, x1, y1))
+    {
+      ROS_DEBUG("Footprint point %lu is off costmap", next);
+      return true;
+    }
+
+    for (base_local_planner::LineIterator line(x0,y0,x1,y1); line.isValid(); line.advance())
+    {
+      if (costmap->getCostmap()->getCost(line.getX(), line.getY()) >= costmap_2d::LETHAL_OBSTACLE)
+      {
+        ROS_DEBUG("Collision along path at (%f,%f)", x, y);
+        return true;
+      }
+    }
   }
 
   // Not colliding
