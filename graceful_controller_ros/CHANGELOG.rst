@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.2.2 (2021-01-13)
+------------------
 * support robot footprint (`#13 <https://github.com/mikeferguson/graceful_controller/issues/13>`_)
 * cleanup parameters (`#12 <https://github.com/mikeferguson/graceful_controller/issues/12>`_)
   * drop unused parameters
