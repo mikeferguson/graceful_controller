@@ -46,6 +46,7 @@
 #include <base_local_planner/local_planner_util.h>
 #include <base_local_planner/goal_functions.h>
 #include <base_local_planner/odometry_helper_ros.h>
+#include <costmap_2d/footprint.h>
 #include <graceful_controller/graceful_controller.hpp>
 #include <std_msgs/Float32.h>
 #include <tf2/utils.h>
@@ -60,6 +61,31 @@ namespace graceful_controller
 double sign(double x)
 {
   return x < 0.0 ? -1.0 : 1.0;
+}
+
+bool isColliding(double x, double y, double theta,
+                 costmap_2d::Costmap2DROS* costmap)
+{
+  unsigned mx, my;
+  if (!costmap->getCostmap()->worldToMap(x, y, mx, my))
+  {
+    ROS_DEBUG("Path is off costmap (%f,%f)", x, y);
+    return true;
+  }
+
+  // TODO: footprint
+  std::vector<geometry_msgs::Point> footprint = costmap->getRobotFootprint();
+  std::vector<geometry_msgs::Point> oriented;
+  costmap_2d::transformFootprint(x, y, theta, footprint, oriented);
+
+  if (costmap->getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
+  {
+    ROS_DEBUG("Collision along path at (%f,%f)", x, y);
+    return true;
+  }
+
+  // Not colliding
+  return false;
 }
 
 class GracefulControllerROS : public nav_core::BaseLocalPlanner
@@ -331,16 +357,12 @@ public:
 
         // Check next pose for collision
         tf2::doTransform(next_pose, next_pose, base_to_odom);
-        unsigned mx, my;
-        if (!planner_util_.getCostmap()->worldToMap(next_pose.pose.position.x, next_pose.pose.position.y, mx, my))
+        if (isColliding(next_pose.pose.position.x,
+                        next_pose.pose.position.y,
+                        yaw,
+                        costmap_ros_))
         {
-          ROS_DEBUG("Path is off costmap (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
-          break;
-        }
-        if (planner_util_.getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
-        {
-          // Collision - can't go this far!
-          ROS_DEBUG("Collision along path at (%f,%f)", next_pose.pose.position.x, next_pose.pose.position.y);
+          // Reason will be printed in function
           break;
         }
       }
