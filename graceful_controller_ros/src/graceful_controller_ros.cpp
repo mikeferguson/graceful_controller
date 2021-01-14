@@ -129,27 +129,18 @@ public:
     // Lock the mutex
     std::lock_guard<std::mutex> lock(config_mutex_);
 
-    // Update generic local planner params
-    base_local_planner::LocalPlannerLimits limits;
-    limits.max_vel_x = config.max_vel_x;
-    limits.min_vel_x = config.min_vel_x;
-    limits.max_vel_theta = config.max_vel_theta;
-    limits.min_vel_theta = config.min_vel_theta;
-    limits.acc_lim_x = config.acc_lim_x;
-    limits.acc_lim_theta = config.acc_lim_theta;
-    limits.xy_goal_tolerance = config.xy_goal_tolerance;
-    limits.yaw_goal_tolerance = config.yaw_goal_tolerance;
-    planner_util_.reconfigureCB(limits, false);
-
+    max_vel_x_ = config.max_vel_x;
+    min_vel_x_ = config.min_vel_x;
+    max_vel_theta_ = config.max_vel_theta;
+    min_vel_theta_ = config.min_vel_theta;
+    min_in_place_vel_theta_ = config.min_in_place_vel_theta;
+    acc_lim_x_ = config.acc_lim_x;
+    acc_lim_theta_ = config.acc_lim_theta;
     xy_goal_tolerance_ = config.xy_goal_tolerance;
     yaw_goal_tolerance_ = config.yaw_goal_tolerance;
-    min_in_place_vel_theta_ = config.min_in_place_vel_theta;
     max_lookahead_ = config.max_lookahead;
     initial_rotate_tolerance_ = config.initial_rotate_tolerance;
     resolution_ = planner_util_.getCostmap()->getResolution();
-
-    // Note: calling dynamic reconfigure will override velocity topic
-    max_vel_x_ = config.max_vel_x;
 
     controller_ = std::make_shared<GracefulController>(config.k1,
                                                        config.k2,
@@ -244,13 +235,12 @@ public:
       // Configure controller max velocity based on current speed
       if (!odom_helper_.getOdomTopic().empty())
       {
-        base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
         geometry_msgs::PoseStamped robot_velocity;
         odom_helper_.getRobotVel(robot_velocity);
-        double max_vel_x = robot_velocity.pose.position.x + (limits.acc_lim_x * acc_dt_);
+        double max_vel_x = robot_velocity.pose.position.x + (acc_lim_x_ * acc_dt_);
         max_vel_x = std::min(max_vel_x, max_vel_x_);
-        max_vel_x = std::max(max_vel_x, limits.min_vel_x);
-        controller_->setVelocityLimits(limits.min_vel_x, max_vel_x, limits.max_vel_theta);
+        max_vel_x = std::max(max_vel_x, min_vel_x_);
+        controller_->setVelocityLimits(min_vel_x_, max_vel_x, max_vel_theta_);
       }
 
       // Simulated path (for debugging/visualization)
@@ -463,23 +453,20 @@ public:
 
     ROS_DEBUG("Rotating towards goal, error = %f", yaw);
 
-    // Get limits so we can compute velocity
-    base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
-
     // Determine max velocity based on current speed
-    double max_vel_th = limits.max_vel_theta;
+    double max_vel_th = max_vel_theta_;
     if (!odom_helper_.getOdomTopic().empty())
     {
       geometry_msgs::PoseStamped robot_velocity;
       odom_helper_.getRobotVel(robot_velocity);
       double abs_vel = fabs(tf2::getYaw(robot_velocity.pose.orientation));
-      double acc_limited = abs_vel + (limits.acc_lim_theta * acc_dt_);
+      double acc_limited = abs_vel + (acc_lim_theta_ * acc_dt_);
       max_vel_th = std::min(max_vel_th, acc_limited);
       max_vel_th = std::max(max_vel_th, min_in_place_vel_theta_);
     }
 
     cmd_vel.linear.x = 0.0;
-    cmd_vel.angular.z = 2 * limits.acc_lim_theta * fabs(yaw);
+    cmd_vel.angular.z = 2 * acc_lim_theta_ * fabs(yaw);
     cmd_vel.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
 
     // Return error
@@ -492,8 +479,7 @@ private:
     // Lock the mutex
     std::lock_guard<std::mutex> lock(config_mutex_);
 
-    base_local_planner::LocalPlannerLimits limits = planner_util_.getCurrentLimits();
-    max_vel_x_ = std::max(std::min(static_cast<double>(max_vel_x->data), limits.max_vel_x), limits.min_vel_x);
+    max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
   }
 
   ros::Publisher global_plan_pub_, local_plan_pub_;
@@ -511,7 +497,12 @@ private:
   std::mutex config_mutex_;
   dynamic_reconfigure::Server<GracefulControllerConfig> *dsrv_;
   double max_vel_x_;
+  double min_vel_x_;
+  double max_vel_theta_;
+  double min_vel_theta_;
   double min_in_place_vel_theta_;
+  double acc_lim_x_;
+  double acc_lim_theta_;
   double xy_goal_tolerance_;
   double yaw_goal_tolerance_;
   double max_lookahead_;
