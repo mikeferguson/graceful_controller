@@ -194,6 +194,27 @@ public:
     // Lock the mutex
     std::lock_guard<std::mutex> lock(config_mutex_);
 
+    // Need to configure the planner utils
+    base_local_planner::LocalPlannerLimits limits;
+    limits.max_vel_trans = 0.0;
+    limits.min_vel_trans = 0.0;
+    limits.max_vel_x = config.max_vel_x;
+    limits.min_vel_x = config.min_vel_x;
+    limits.max_vel_y = 0.0;
+    limits.min_vel_y = 0.0;
+    limits.max_vel_theta = config.max_vel_theta;
+    limits.min_vel_theta = config.min_vel_theta;
+    limits.acc_lim_x = config.acc_lim_x;
+    limits.acc_lim_y = 0.0;
+    limits.acc_lim_theta = config.acc_lim_theta;
+    limits.acc_lim_trans = 0.0;
+    limits.xy_goal_tolerance = config.xy_goal_tolerance;
+    limits.yaw_goal_tolerance = config.yaw_goal_tolerance;
+    limits.prune_plan = false;
+    limits.trans_stopped_vel = 0.0;
+    limits.theta_stopped_vel = 0.0;
+    planner_util_.reconfigureCB(limits, false);
+
     max_vel_x_ = config.max_vel_x;
     min_vel_x_ = config.min_vel_x;
     max_vel_theta_ = config.max_vel_theta;
