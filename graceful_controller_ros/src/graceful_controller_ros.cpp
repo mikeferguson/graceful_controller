@@ -131,23 +131,14 @@ public:
 
     // Update generic local planner params
     base_local_planner::LocalPlannerLimits limits;
-    limits.max_vel_trans = config.max_vel_trans;
-    limits.min_vel_trans = config.min_vel_trans;
     limits.max_vel_x = config.max_vel_x;
     limits.min_vel_x = config.min_vel_x;
-    limits.max_vel_y = config.max_vel_y;
-    limits.min_vel_y = config.min_vel_y;
     limits.max_vel_theta = config.max_vel_theta;
     limits.min_vel_theta = config.min_vel_theta;
     limits.acc_lim_x = config.acc_lim_x;
-    limits.acc_lim_y = config.acc_lim_y;
     limits.acc_lim_theta = config.acc_lim_theta;
-    limits.acc_lim_trans = config.acc_lim_trans;
     limits.xy_goal_tolerance = config.xy_goal_tolerance;
     limits.yaw_goal_tolerance = config.yaw_goal_tolerance;
-    limits.prune_plan = config.prune_plan;
-    limits.trans_stopped_vel = config.trans_stopped_vel;
-    limits.theta_stopped_vel = config.theta_stopped_vel;
     planner_util_.reconfigureCB(limits, false);
 
     xy_goal_tolerance_ = config.xy_goal_tolerance;
