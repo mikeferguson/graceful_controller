@@ -172,6 +172,9 @@ public:
                          boost::bind(&GracefulControllerROS::velocityCallback, this, _1));
       }
 
+      prefer_final_rotation_ = false;
+      private_nh.getParam("prefer_final_rotation", prefer_final_rotation_);
+
       initialized_ = true;
 
       // Dynamic reconfigure is really only intended for tuning controller!
@@ -296,7 +299,7 @@ public:
     }
 
     geometry_msgs::PoseStamped pose;
-     tf2::doTransform(transformed_plan.back(), pose, odom_to_base);
+    tf2::doTransform(transformed_plan.back(), pose, odom_to_base);
     if (std::hypot(pose.pose.position.x, pose.pose.position.y) < xy_goal_tolerance_)
     {
       // XY goal tolerance reached - now just rotate towards goal
@@ -316,6 +319,14 @@ public:
       if (std::hypot(pose.pose.position.x, pose.pose.position.y) > max_lookahead_)
       {
         continue;
+      }
+
+      // Avoid big sweeping turns at the end of paths
+      if (prefer_final_rotation_ && transformed_plan.size() == static_cast<size_t>(i + 1))
+      {
+        geometry_msgs::PoseStamped penultimate;
+        tf2::doTransform(transformed_plan[i - 1], penultimate, odom_to_base);
+        pose.pose.orientation = penultimate.pose.orientation;
       }
 
       // Configure controller max velocity based on current speed
@@ -590,6 +601,7 @@ private:
   double max_lookahead_;
   double resolution_;
   double acc_dt_;
+  bool prefer_final_rotation_;
 
   // Controls initial rotation towards path
   double initial_rotate_tolerance_;
