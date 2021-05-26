@@ -150,6 +150,7 @@ public:
       ros::NodeHandle private_nh("~/" + name);
       global_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
       local_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
+      pose_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("target_pose", 1);
 
       buffer_ = tf;
       costmap_ros_ = costmap_ros;
@@ -171,6 +172,14 @@ public:
         max_vel_sub_ = nh.subscribe<std_msgs::Float32>("max_vel_x", 1,
                          boost::bind(&GracefulControllerROS::velocityCallback, this, _1));
       }
+
+      // Optionally prefer to do a final in-place rotation rather than gracefull approach final pose
+      prefer_final_rotation_ = false;
+      private_nh.getParam("prefer_final_rotation", prefer_final_rotation_);
+
+      // Optionally filted plan for poses with large difference in heading
+      yaw_filter_tolerance_ = 0.785;  // default of 45 degrees
+      private_nh.getParam("yaw_filter_tolerance", yaw_filter_tolerance_);
 
       initialized_ = true;
 
@@ -296,7 +305,7 @@ public:
     }
 
     geometry_msgs::PoseStamped pose;
-     tf2::doTransform(transformed_plan.back(), pose, odom_to_base);
+    tf2::doTransform(transformed_plan.back(), pose, odom_to_base);
     if (std::hypot(pose.pose.position.x, pose.pose.position.y) < xy_goal_tolerance_)
     {
       // XY goal tolerance reached - now just rotate towards goal
@@ -317,6 +326,16 @@ public:
       {
         continue;
       }
+
+      // Avoid unstability and big sweeping turns at the end of paths by ignoring final heading
+      if (prefer_final_rotation_ && (transformed_plan.size() - i) < 5)
+      {
+        double yaw = std::atan2(pose.pose.position.y, pose.pose.position.x);
+        pose.pose.orientation.z = sin(yaw / 2.0);
+        pose.pose.orientation.w = cos(yaw / 2.0);
+      }
+
+      pose_pub_.publish(pose);
 
       // Configure controller max velocity based on current speed
       if (!odom_helper_.getOdomTopic().empty())
@@ -497,12 +516,30 @@ public:
       oriented_plan[i].pose.orientation.w = cos(yaw / 2.0);
     }
 
-    // TODO: filter noisy orientations?
+    // Filter noisy orientations
+    std::vector<geometry_msgs::PoseStamped> filtered_plan;
+    filtered_plan.reserve(oriented_plan.size());
+    filtered_plan.push_back(oriented_plan.front());
+    for (size_t i = 1; i < oriented_plan.size() - 1; ++i)
+    {
+      // Compare to before and after
+      if (angles::shortest_angular_distance(tf2::getYaw(filtered_plan.back().pose.orientation),
+                                            tf2::getYaw(oriented_plan[i].pose.orientation)) < yaw_filter_tolerance_)
+      {
+        filtered_plan.push_back(oriented_plan[i]);
+      }
+      else
+      {
+        ROS_DEBUG_NAMED("graceful_controller", "Filtering pose %lu", i);
+      }
+    }
+    filtered_plan.push_back(oriented_plan.back());
+    ROS_DEBUG_NAMED("graceful_controller", "Filtered %lu points from plan", oriented_plan.size() - filtered_plan.size());
 
-    if (planner_util_.setPlan(oriented_plan))
+    if (planner_util_.setPlan(filtered_plan))
     {
       has_new_path_ = true;
-      ROS_INFO("Recieved a new path with %lu points", oriented_plan.size());
+      ROS_INFO("Recieved a new path with %lu points", filtered_plan.size());
       return true;
     }
 
@@ -533,7 +570,7 @@ public:
       yaw = tf2::getYaw(pose.pose.orientation);
     }
 
-    ROS_DEBUG("Rotating towards goal, error = %f", yaw);
+    ROS_DEBUG_NAMED("graceful_controller", "Rotating towards goal, error = %f", yaw);
 
     // Determine max velocity based on current speed
     double max_vel_th = max_vel_theta_;
@@ -564,7 +601,7 @@ private:
     max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
   }
 
-  ros::Publisher global_plan_pub_, local_plan_pub_;
+  ros::Publisher global_plan_pub_, local_plan_pub_, pose_pub_;
   ros::Subscriber max_vel_sub_;
 
   bool initialized_;
@@ -590,6 +627,8 @@ private:
   double max_lookahead_;
   double resolution_;
   double acc_dt_;
+  double yaw_filter_tolerance_;
+  bool prefer_final_rotation_;
 
   // Controls initial rotation towards path
   double initial_rotate_tolerance_;
