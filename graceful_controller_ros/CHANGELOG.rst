@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.3.1 (2021-05-27)
+------------------
 * add feature for final rotation (`#15 <https://github.com/mikeferguson/graceful_controller/issues/15>`_)
   if the final pose orientation is very different from the end
   of the path, we get a big sweeping turn. this feature uses
