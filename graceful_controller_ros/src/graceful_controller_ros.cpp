@@ -335,8 +335,6 @@ public:
         pose.pose.orientation.w = cos(yaw / 2.0);
       }
 
-      pose_pub_.publish(pose);
-
       // Configure controller max velocity based on current speed
       if (!odom_helper_.getOdomTopic().empty())
       {
@@ -350,6 +348,8 @@ public:
 
       // Simulated path (for debugging/visualization)
       std::vector<geometry_msgs::PoseStamped> path;
+      // Should we simulate rotation initially
+      bool sim_initial_rotation_ = has_new_path_ && initial_rotate_tolerance_ > 0.0;
       // Get control and path, iteratively
       while (true)
       {
@@ -376,37 +376,44 @@ public:
 
         // Compute commands
         double vel_x, vel_th;
-        if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle,
-                                   vel_x, vel_th))
+        if (sim_initial_rotation_)
         {
-          ROS_ERROR("Unable to compute approach");
-          return false;
+          geometry_msgs::Twist rotation;
+          if (fabs(rotateTowards(error, rotation)) < initial_rotate_tolerance_)
+          {
+            if (path.empty())
+            {
+              // Current robot pose satisifies initial rotate tolerance
+              ROS_WARN("Done rotating towards path");
+              has_new_path_ = false;
+            }
+            sim_initial_rotation_ = false;
+          }
+          vel_x = rotation.linear.x;
+          vel_th = rotation.angular.z;
+        }
+
+        if (!sim_initial_rotation_)
+        {
+          if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle,
+                                     vel_x, vel_th))
+          {
+            ROS_ERROR("Unable to compute approach");
+            return false;
+          }
         }
 
         if (path.empty())
         {
+          // First iteration of simulation, store our commands to the robot
           cmd_vel.linear.x = vel_x;
           cmd_vel.angular.z = vel_th;
         }
         else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
         {
-          if (has_new_path_ && initial_rotate_tolerance_ > 0.0)
-          {
-            // Rotate towards goal
-            geometry_msgs::Twist rotation;
-            if (fabs(rotateTowards(pose, rotation)) < initial_rotate_tolerance_)
-            {
-              ROS_INFO("Done rotating towards path");
-              has_new_path_ = false;
-            }
-            else
-            {
-              cmd_vel = rotation;
-            }
-          }
-
-          // We have reached lookahead goal without collision
+          // We've simulated to the desired pose, can return this result
           base_local_planner::publishPlan(path, local_plan_pub_);
+          pose_pub_.publish(pose);
           return true;
         }
 
@@ -425,7 +432,7 @@ public:
         }
 
         // Generate next pose
-        double dt = resolution_ / vel_x;
+        double dt = (vel_x > 0.0) ?  resolution_ / vel_x : 0.1;
         double yaw = tf2::getYaw(next_pose.pose.orientation);
         next_pose.pose.position.x += dt * vel_x * cos(yaw);
         next_pose.pose.position.y += dt * vel_x * sin(yaw);
