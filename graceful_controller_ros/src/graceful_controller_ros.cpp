@@ -379,7 +379,7 @@ public:
         if (sim_initial_rotation_)
         {
           geometry_msgs::Twist rotation;
-          if (fabs(rotateTowards(error, rotation) < initial_rotate_tolerance_))
+          if (fabs(rotateTowards(error, rotation)) < initial_rotate_tolerance_)
           {
             if (path.empty())
             {
