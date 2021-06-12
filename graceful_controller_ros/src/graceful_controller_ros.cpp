@@ -150,7 +150,7 @@ public:
       ros::NodeHandle private_nh("~/" + name);
       global_plan_pub_ = private_nh.advertise<nav_msgs::Path>("global_plan", 1);
       local_plan_pub_ = private_nh.advertise<nav_msgs::Path>("local_plan", 1);
-      pose_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("target_pose", 1);
+      target_pose_pub_ = private_nh.advertise<geometry_msgs::PoseStamped>("target_pose", 1);
 
       buffer_ = tf;
       costmap_ros_ = costmap_ros;
@@ -177,7 +177,7 @@ public:
       prefer_final_rotation_ = false;
       private_nh.getParam("prefer_final_rotation", prefer_final_rotation_);
 
-      // Optionally filted plan for poses with large difference in heading
+      // Optionally filter plan for poses with large difference in heading
       yaw_filter_tolerance_ = 0.785;  // default of 45 degrees
       private_nh.getParam("yaw_filter_tolerance", yaw_filter_tolerance_);
 
@@ -304,40 +304,78 @@ public:
       return false;
     }
 
-    geometry_msgs::PoseStamped pose;
-    tf2::doTransform(transformed_plan.back(), pose, odom_to_base);
-    if (std::hypot(pose.pose.position.x, pose.pose.position.y) < xy_goal_tolerance_)
+    // Get the overall goal
+    geometry_msgs::PoseStamped goal_pose;
+    if (!planner_util_.getGoal(goal_pose))
     {
-      // XY goal tolerance reached - now just rotate towards goal
-      geometry_msgs::PoseStamped goal;
-      tf2::doTransform(transformed_plan.back(), goal, odom_to_base);
-      rotateTowards(goal, cmd_vel);
+      ROS_ERROR("Unable to get goal");
+      return false;
+    }
+
+    // Compute distance to goal
+    double dist_to_goal = std::hypot(goal_pose.pose.position.x - robot_pose_.pose.position.x,
+                                     goal_pose.pose.position.y - robot_pose_.pose.position.y);
+
+    // If we've reached the XY goal tolerance, just rotate
+    if (dist_to_goal < xy_goal_tolerance_)
+    {
+      // Compute velocity required to rotate towards goal
+      tf2::doTransform(transformed_plan.back(), goal_pose, odom_to_base);
+      rotateTowards(goal_pose, cmd_vel);
+      // Check for collisions between our current pose and goal
+      double yaw_start = tf2::getYaw(robot_pose_.pose.orientation);
+      double yaw_end = tf2::getYaw(goal_pose.pose.orientation);
+      size_t num_steps = fabs(yaw_end - yaw_start) / 0.1;
+      // Need to check at least the end pose
+      if (num_steps < 1) num_steps = 1;
+      for (size_t i = 1; i <= num_steps; ++i)
+      {
+        double step = static_cast<double>(i) / static_cast<double>(num_steps);
+        double yaw = yaw_start + (step * (yaw_start - yaw_end));
+        if (isColliding(robot_pose_.pose.position.x,
+                        robot_pose_.pose.position.y,
+                        yaw,
+                        costmap_ros_))
+        {
+          ROS_ERROR("Unable to rotate in place due to collision.");
+          return false;
+        }
+      }
+      // Safe to rotate, execute computed command
       return true;
     }
 
-    // Work back from the end of plan
+    // Work back from the end of plan to find valid target pose
     for (int i = transformed_plan.size() - 1; i >= 0; --i)
     {
-      // Transform pose into base_link
-      tf2::doTransform(transformed_plan[i], pose, odom_to_base);
+      // Underlying control law needs a single target pose, which should:
+      //  * Be as far away as possible from the robot (for smoothness)
+      //  * But no further than the max_lookahed_ distance
+      //  * Be feasible to reach in a collision free manner
+      geometry_msgs::PoseStamped target_pose;
 
-      // Continue if this is too far away
-      if (std::hypot(pose.pose.position.x, pose.pose.position.y) > max_lookahead_)
+      // Transform potential target pose into base_link
+      tf2::doTransform(transformed_plan[i], target_pose, odom_to_base);
+
+      // Continue if target_pose is too far away from robot
+      if (std::hypot(target_pose.pose.position.x, target_pose.pose.position.y) > max_lookahead_)
       {
         continue;
       }
 
       // Avoid unstability and big sweeping turns at the end of paths by ignoring final heading
-      if (prefer_final_rotation_ && (transformed_plan.size() - i) < 5)
+      if (prefer_final_rotation_ && (dist_to_goal < max_lookahead_))
       {
-        double yaw = std::atan2(pose.pose.position.y, pose.pose.position.x);
-        pose.pose.orientation.z = sin(yaw / 2.0);
-        pose.pose.orientation.w = cos(yaw / 2.0);
+        double yaw = std::atan2(target_pose.pose.position.y, target_pose.pose.position.x);
+        target_pose.pose.orientation.z = sin(yaw / 2.0);
+        target_pose.pose.orientation.w = cos(yaw / 2.0);
       }
 
       // Configure controller max velocity based on current speed
       if (!odom_helper_.getOdomTopic().empty())
       {
+        // The API of the OdometryHelperROS uses a PoseStamped
+        // but the data returned is velocities (should be a Twist)
         geometry_msgs::PoseStamped robot_velocity;
         odom_helper_.getRobotVel(robot_velocity);
         double max_vel_x = robot_velocity.pose.position.x + (acc_lim_x_ * acc_dt_);
@@ -347,25 +385,25 @@ public:
       }
 
       // Simulated path (for debugging/visualization)
-      std::vector<geometry_msgs::PoseStamped> path;
+      std::vector<geometry_msgs::PoseStamped> simulated_path;
       // Should we simulate rotation initially
       bool sim_initial_rotation_ = has_new_path_ && initial_rotate_tolerance_ > 0.0;
       // Get control and path, iteratively
       while (true)
       {
-        // The error between current robot pose and the lookahead goal
-        geometry_msgs::PoseStamped error = pose;
+        // The error between current robot pose and the target pose
+        geometry_msgs::PoseStamped error = target_pose;
 
         // Extract error_angle
         double error_angle = tf2::getYaw(error.pose.orientation);
 
         // Move origin to our current simulated pose
-        if (!path.empty())
+        if (!simulated_path.empty())
         {
-          double x = error.pose.position.x - path.back().pose.position.x;
-          double y = error.pose.position.y - path.back().pose.position.y;
+          double x = error.pose.position.x - simulated_path.back().pose.position.x;
+          double y = error.pose.position.y - simulated_path.back().pose.position.y;
 
-          double theta = -tf2::getYaw(path.back().pose.orientation);
+          double theta = -tf2::getYaw(simulated_path.back().pose.orientation);
           error.pose.position.x = x * cos(theta) - y * sin(theta);
           error.pose.position.y = y * cos(theta) + x * sin(theta);
 
@@ -381,7 +419,7 @@ public:
           geometry_msgs::Twist rotation;
           if (fabs(rotateTowards(error, rotation)) < initial_rotate_tolerance_)
           {
-            if (path.empty())
+            if (simulated_path.empty())
             {
               // Current robot pose satisifies initial rotate tolerance
               ROS_WARN("Done rotating towards path");
@@ -403,7 +441,7 @@ public:
           }
         }
 
-        if (path.empty())
+        if (simulated_path.empty())
         {
           // First iteration of simulation, store our commands to the robot
           cmd_vel.linear.x = vel_x;
@@ -412,15 +450,15 @@ public:
         else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
         {
           // We've simulated to the desired pose, can return this result
-          base_local_planner::publishPlan(path, local_plan_pub_);
-          pose_pub_.publish(pose);
+          base_local_planner::publishPlan(simulated_path, local_plan_pub_);
+          target_pose_pub_.publish(target_pose);
           return true;
         }
 
         // Forward simulate command
         geometry_msgs::PoseStamped next_pose;
         next_pose.header.frame_id = costmap_ros_->getBaseFrameID();
-        if (path.empty())
+        if (simulated_path.empty())
         {
           // Initialize at origin
           next_pose.pose.orientation.w = 1.0;
@@ -428,7 +466,7 @@ public:
         else
         {
           // Start at last pose
-          next_pose = path.back();
+          next_pose = simulated_path.back();
         }
 
         // Generate next pose
@@ -439,7 +477,7 @@ public:
         yaw += dt * vel_th;
         next_pose.pose.orientation.z = sin(yaw / 2.0);
         next_pose.pose.orientation.w = cos(yaw / 2.0);
-        path.push_back(next_pose);
+        simulated_path.push_back(next_pose);
 
         // Check next pose for collision
         tf2::doTransform(next_pose, next_pose, base_to_odom);
@@ -583,6 +621,8 @@ public:
     double max_vel_th = max_vel_theta_;
     if (!odom_helper_.getOdomTopic().empty())
     {
+      // The API of the OdometryHelperROS uses a PoseStamped
+      // but the data returned is velocities (should be a Twist)
       geometry_msgs::PoseStamped robot_velocity;
       odom_helper_.getRobotVel(robot_velocity);
       double abs_vel = fabs(tf2::getYaw(robot_velocity.pose.orientation));
@@ -608,7 +648,7 @@ private:
     max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
   }
 
-  ros::Publisher global_plan_pub_, local_plan_pub_, pose_pub_;
+  ros::Publisher global_plan_pub_, local_plan_pub_, target_pose_pub_;
   ros::Subscriber max_vel_sub_;
 
   bool initialized_;
