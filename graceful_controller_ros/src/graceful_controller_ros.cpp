@@ -212,7 +212,6 @@ public:
     limits.max_vel_y = 0.0;
     limits.min_vel_y = 0.0;
     limits.max_vel_theta = config.max_vel_theta;
-    limits.min_vel_theta = config.min_vel_theta;
     limits.acc_lim_x = config.acc_lim_x;
     limits.acc_lim_y = 0.0;
     limits.acc_lim_theta = config.acc_lim_theta;
@@ -227,7 +226,6 @@ public:
     max_vel_x_ = config.max_vel_x;
     min_vel_x_ = config.min_vel_x;
     max_vel_theta_ = config.max_vel_theta;
-    min_vel_theta_ = config.min_vel_theta;
     min_in_place_vel_theta_ = config.min_in_place_vel_theta;
     acc_lim_x_ = config.acc_lim_x;
     acc_lim_theta_ = config.acc_lim_theta;
@@ -665,7 +663,6 @@ private:
   double max_vel_x_;
   double min_vel_x_;
   double max_vel_theta_;
-  double min_vel_theta_;
   double min_in_place_vel_theta_;
   double acc_lim_x_;
   double acc_lim_theta_;
