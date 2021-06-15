@@ -2,6 +2,21 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* add usage documentation (`#19 <https://github.com/mikeferguson/graceful_controller/issues/19>`_)
+  also remove unused min_vel_theta parameter
+* implement changes from review (`#18 <https://github.com/mikeferguson/graceful_controller/issues/18>`_)
+  * Add collision checking during final rotation
+  * Add comments about getRobotVel returning velocities
+  * Rename path to simulated_path for clarity
+  * Rename pose to target_pose and goal_pose (now separate variables)
+  * Get rid of magic number for when to use final rotation
+* simulate intial rotation properly (`#17 <https://github.com/mikeferguson/graceful_controller/issues/17>`_)
+  previously, this simulated the big arc that we wouldn't follow anyways.
+  this could cause the robot to get stuck in corners or other tight areas.
+* Contributors: Michael Ferguson
+
 0.3.1 (2021-05-27)
 ------------------
 * add feature for final rotation (`#15 <https://github.com/mikeferguson/graceful_controller/issues/15>`_)
