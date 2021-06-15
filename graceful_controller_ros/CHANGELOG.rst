@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.0 (2021-06-14)
+------------------
 * add usage documentation (`#19 <https://github.com/mikeferguson/graceful_controller/issues/19>`_)
   also remove unused min_vel_theta parameter
 * implement changes from review (`#18 <https://github.com/mikeferguson/graceful_controller/issues/18>`_)
