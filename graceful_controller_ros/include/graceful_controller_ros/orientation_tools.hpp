@@ -36,8 +36,8 @@
 * Author: Michael Ferguson
 *********************************************************************/
 
-#ifndef GRACEFUL_CONTROLLER_ROS_ORIENTATION_FILTER_HPP
-#define GRACEFUL_CONTROLLER_ROS_ORIENTATION_FILTER_HPP
+#ifndef GRACEFUL_CONTROLLER_ROS_ORIENTATION_TOOLS_HPP
+#define GRACEFUL_CONTROLLER_ROS_ORIENTATION_TOOLS_HPP
 
 #include <vector>
 #include <geometry_msgs/PoseStamped.h>
@@ -46,15 +46,23 @@ namespace graceful_controller
 {
 
 /**
+ * @brief Add orientation to each pose in a path.
+ * @param path The path to have orientations added.
+ * @returns The oriented path.
+ */
+std::vector<geometry_msgs::PoseStamped>
+add_orientations(const std::vector<geometry_msgs::PoseStamped>& path);
+
+/**
  * @brief Filter a path for orientation noise.
  * @param path The path to be filtered.
  * @param yaw_tolerance Maximum deviation allowed before a pose is filtered.
  * @returns The filtered path.
  */
 std::vector<geometry_msgs::PoseStamped>
-apply_orientation_filter(std::vector<geometry_msgs::PoseStamped>& path,
+apply_orientation_filter(const std::vector<geometry_msgs::PoseStamped>& path,
                          double yaw_tolerance);
 
 }  // namespace graceful_controller
 
-#endif  // GRACEFUL_CONTROLLER_ROS_ORIENTATION_FILTER_HPP
+#endif  // GRACEFUL_CONTROLLER_ROS_ORIENTATION_TOOLS_HPP

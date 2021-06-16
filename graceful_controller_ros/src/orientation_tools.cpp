@@ -39,13 +39,36 @@
 #include <ros/ros.h>
 #include <angles/angles.h>
 #include <tf2/utils.h>  // getYaw
-#include "graceful_controller_ros/orientation_filter.hpp"
+#include "graceful_controller_ros/orientation_tools.hpp"
 
 namespace graceful_controller
 {
 
 std::vector<geometry_msgs::PoseStamped>
-apply_orientation_filter(std::vector<geometry_msgs::PoseStamped>& path,
+add_orientations(const std::vector<geometry_msgs::PoseStamped>& path)
+{
+  std::vector<geometry_msgs::PoseStamped> oriented_path;
+  oriented_path.resize(path.size());
+
+  // The last pose will already be oriented since it is our goal
+  oriented_path.back() = path.back();
+
+  // For each pose, point at the next one
+  for (size_t i = 0; i < oriented_path.size() - 1; ++i)
+  {
+    oriented_path[i] = path[i];
+    double dx = path[i+1].pose.position.x - path[i].pose.position.x;
+    double dy = path[i+1].pose.position.y - path[i].pose.position.y;
+    double yaw = std::atan2(dy, dx);
+    oriented_path[i].pose.orientation.z = sin(yaw / 2.0);
+    oriented_path[i].pose.orientation.w = cos(yaw / 2.0);
+  }
+
+  return oriented_path;
+}
+
+std::vector<geometry_msgs::PoseStamped>
+apply_orientation_filter(const std::vector<geometry_msgs::PoseStamped>& path,
                          double yaw_tolerance)
 {
 	std::vector<geometry_msgs::PoseStamped> filtered_path;

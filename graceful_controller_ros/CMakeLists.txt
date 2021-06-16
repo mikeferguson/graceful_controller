@@ -56,7 +56,7 @@ include_directories(
 
 add_library(graceful_controller_ros
   src/graceful_controller_ros.cpp
-  src/orientation_filter.cpp
+  src/orientation_tools.cpp
 )
 target_link_libraries(graceful_controller_ros
   ${catkin_LIBRARIES}

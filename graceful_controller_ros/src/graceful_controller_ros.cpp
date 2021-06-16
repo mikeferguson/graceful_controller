@@ -49,7 +49,7 @@
 #include <base_local_planner/odometry_helper_ros.h>
 #include <costmap_2d/footprint.h>
 #include <graceful_controller/graceful_controller.hpp>
-#include <graceful_controller_ros/orientation_filter.hpp>
+#include <graceful_controller_ros/orientation_tools.hpp>
 #include <std_msgs/Float32.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -544,21 +544,7 @@ public:
 
     // We need orientations on our poses
     std::vector<geometry_msgs::PoseStamped> oriented_plan;
-    oriented_plan.resize(plan.size());
-
-    // Copy the only oriented pose
-    oriented_plan.back() = plan.back();
-
-    // For each pose, point at the next one
-    for (size_t i = 0; i < oriented_plan.size() - 1; ++i)
-    {
-      oriented_plan[i] = plan[i];
-      double dx = plan[i+1].pose.position.x - plan[i].pose.position.x;
-      double dy = plan[i+1].pose.position.y - plan[i].pose.position.y;
-      double yaw = std::atan2(dy, dx);
-      oriented_plan[i].pose.orientation.z = sin(yaw / 2.0);
-      oriented_plan[i].pose.orientation.w = cos(yaw / 2.0);
-    }
+    oriented_plan = add_orientations(plan);
 
     // Filter noisy orientations
     std::vector<geometry_msgs::PoseStamped> filtered_plan;
