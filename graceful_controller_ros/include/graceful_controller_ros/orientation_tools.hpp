@@ -51,7 +51,7 @@ namespace graceful_controller
  * @returns The oriented path.
  */
 std::vector<geometry_msgs::PoseStamped>
-add_orientations(const std::vector<geometry_msgs::PoseStamped>& path);
+addOrientations(const std::vector<geometry_msgs::PoseStamped>& path);
 
 /**
  * @brief Filter a path for orientation noise.
@@ -60,8 +60,8 @@ add_orientations(const std::vector<geometry_msgs::PoseStamped>& path);
  * @returns The filtered path.
  */
 std::vector<geometry_msgs::PoseStamped>
-apply_orientation_filter(const std::vector<geometry_msgs::PoseStamped>& path,
-                         double yaw_tolerance);
+applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
+                       double yaw_tolerance);
 
 }  // namespace graceful_controller
 

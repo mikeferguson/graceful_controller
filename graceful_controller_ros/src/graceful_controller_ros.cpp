@@ -544,11 +544,11 @@ public:
 
     // We need orientations on our poses
     std::vector<geometry_msgs::PoseStamped> oriented_plan;
-    oriented_plan = add_orientations(plan);
+    oriented_plan = addOrientations(plan);
 
     // Filter noisy orientations
     std::vector<geometry_msgs::PoseStamped> filtered_plan;
-    filtered_plan = apply_orientation_filter(oriented_plan, yaw_filter_tolerance_);
+    filtered_plan = applyOrientationFilter(oriented_plan, yaw_filter_tolerance_);
 
     // Store the plan for computeVelocityCommands
     if (planner_util_.setPlan(filtered_plan))

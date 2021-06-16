@@ -37,6 +37,7 @@
 *********************************************************************/
 
 #include <gtest/gtest.h>
+#include <tf2/utils.h>  // getYaw
 #include "graceful_controller_ros/orientation_tools.hpp"
 
 using namespace graceful_controller;
@@ -59,52 +60,58 @@ TEST(OrientationToolsTests, test_bad_penultimate_pose)
   // Set final pose to be off the grid and slightly BACK from last discrete pose
   path.back().pose.position.x = 0.378;
   path.back().pose.position.y = 0.02;
+  // Set final pose to have a small rotation
+  {
+    double final_yaw = 0.15;
+    path.back().pose.orientation.z = sin(final_yaw / 2.0);
+    path.back().pose.orientation.w = cos(final_yaw / 2.0);
+  }
 
   // Apply orientations
-  path = add_orientations(path);
+  path = addOrientations(path);
 
   // Last orientation should be unaltered
   EXPECT_EQ(0.0, path.back().pose.orientation.x);
   EXPECT_EQ(0.0, path.back().pose.orientation.y);
-  EXPECT_EQ(0.0, path.back().pose.orientation.z);
-  EXPECT_EQ(1.0, path.back().pose.orientation.w);
+  EXPECT_FLOAT_EQ(0.15, tf2::getYaw(path.back().pose.orientation));
 
   // Early orientations should be forward
   for (size_t i = 0; i < 8; ++i)
   {
     EXPECT_EQ(0.0, path[i].pose.orientation.x);
     EXPECT_EQ(0.0, path[i].pose.orientation.y);
-    EXPECT_EQ(0.0, path[i].pose.orientation.z);
-    EXPECT_EQ(1.0, path[i].pose.orientation.w);
+    EXPECT_FLOAT_EQ(0.0, tf2::getYaw(path[i].pose.orientation));
   }
 
   // Penultimate pose should be crazy
   EXPECT_EQ(0.0, path[8].pose.orientation.x);
   EXPECT_EQ(0.0, path[8].pose.orientation.y);
-  EXPECT_FLOAT_EQ(0.93272200, path[8].pose.orientation.z);
-  EXPECT_FLOAT_EQ(0.36059669, path[8].pose.orientation.w);
+  EXPECT_FLOAT_EQ(2.4037776, tf2::getYaw(path[8].pose.orientation));
 
   // Now filter the penultimate pose away
   std::vector<geometry_msgs::PoseStamped> filtered_path;
-  filtered_path = apply_orientation_filter(path, 0.785 /* 45 degrees */);
+  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */);
 
-  // Should have removed one pose
+  // Should have removed one pose (penultimate one)
   EXPECT_EQ(9, static_cast<int>(filtered_path.size()));
 
   // Last orientation should be unaltered
-  EXPECT_EQ(0.0, path.back().pose.orientation.x);
-  EXPECT_EQ(0.0, path.back().pose.orientation.y);
-  EXPECT_EQ(0.0, path.back().pose.orientation.z);
-  EXPECT_EQ(1.0, path.back().pose.orientation.w);
+  EXPECT_EQ(0.0, filtered_path.back().pose.orientation.x);
+  EXPECT_EQ(0.0, filtered_path.back().pose.orientation.y);
+  EXPECT_FLOAT_EQ(0.15, tf2::getYaw(filtered_path.back().pose.orientation));
 
   // Early orientations should be forward
-  for (size_t i = 0; i < 8; ++i)
+  for (size_t i = 0; i < 7; ++i)
   {
-    EXPECT_EQ(0.0, path[i].pose.orientation.x);
-    EXPECT_EQ(0.0, path[i].pose.orientation.y);
-    EXPECT_EQ(0.0, path[i].pose.orientation.z);
-    EXPECT_EQ(1.0, path[i].pose.orientation.w);
+    EXPECT_EQ(0.0, filtered_path[i].pose.orientation.x);
+    EXPECT_EQ(0.0, filtered_path[i].pose.orientation.y);
+    EXPECT_FLOAT_EQ(0.0, tf2::getYaw(filtered_path[i].pose.orientation));
   }
+
+  // Penultimate pose should be "better"
+  EXPECT_EQ(0.0, filtered_path[7].pose.orientation.x);
+  EXPECT_EQ(0.0, filtered_path[7].pose.orientation.y);
+  EXPECT_FLOAT_EQ(0.62024951, tf2::getYaw(filtered_path[7].pose.orientation));
 }
 
 TEST(OrientationToolsTests, test_bad_initial_pose)
@@ -125,46 +132,97 @@ TEST(OrientationToolsTests, test_bad_initial_pose)
   // Set initial pose to be off the grid, leading to bad initial orientation
   path.front().pose.position.x = 0.051;
   path.front().pose.position.y = 0.01;
+  // Set final pose to have a small rotation
+  {
+    double final_yaw = -0.12;
+    path.back().pose.orientation.z = sin(final_yaw / 2.0);
+    path.back().pose.orientation.w = cos(final_yaw / 2.0);
+  }
 
   // Apply orientations
-  path = add_orientations(path);
+  path = addOrientations(path);
 
   // Last orientation should be unaltered
   EXPECT_EQ(0.0, path.back().pose.orientation.x);
   EXPECT_EQ(0.0, path.back().pose.orientation.y);
-  EXPECT_EQ(0.0, path.back().pose.orientation.z);
-  EXPECT_EQ(1.0, path.back().pose.orientation.w);
+  EXPECT_FLOAT_EQ(-0.12, tf2::getYaw(path.back().pose.orientation));
 
   // Initial pose orientation should be crazy
   EXPECT_EQ(0.0, path.front().pose.orientation.x);
   EXPECT_EQ(0.0, path.front().pose.orientation.y);
-  EXPECT_FLOAT_EQ(-0.74145252, path.front().pose.orientation.z);
-  EXPECT_FLOAT_EQ(0.67100531, path.front().pose.orientation.w);
+  EXPECT_FLOAT_EQ(-1.670465, tf2::getYaw(path.front().pose.orientation));
 
   // Other orientations should be forward
-  for (size_t i = 1; i < 10; ++i)
+  for (size_t i = 1; i < 9; ++i)
   {
     EXPECT_EQ(0.0, path[i].pose.orientation.x);
     EXPECT_EQ(0.0, path[i].pose.orientation.y);
-    EXPECT_EQ(0.0, path[i].pose.orientation.z);
-    EXPECT_EQ(1.0, path[i].pose.orientation.w);
+    EXPECT_FLOAT_EQ(0.0, tf2::getYaw(path[i].pose.orientation));
   }
 
   // Now filter the initial pose away
   std::vector<geometry_msgs::PoseStamped> filtered_path;
-  filtered_path = apply_orientation_filter(path, 0.785 /* 45 degrees */);
+  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */);
 
   // Should have removed one pose
-  // TODO: this fails with size 2 - we've removed all the poses except first and last
   EXPECT_EQ(9, static_cast<int>(filtered_path.size()));
 
+  // Initial orientation should be better
+  EXPECT_EQ(0.0, filtered_path.front().pose.orientation.x);
+  EXPECT_EQ(0.0, filtered_path.front().pose.orientation.y);
+  EXPECT_FLOAT_EQ(-0.2013171, tf2::getYaw(filtered_path.front().pose.orientation));
+
   // Other orientations should be forward
-  for (size_t i = 1; i < 10; ++i)
+  for (size_t i = 1; i < 8; ++i)
   {
-    EXPECT_EQ(0.0, path[i].pose.orientation.x);
-    EXPECT_EQ(0.0, path[i].pose.orientation.y);
-    EXPECT_EQ(0.0, path[i].pose.orientation.z);
-    EXPECT_EQ(1.0, path[i].pose.orientation.w);
+    EXPECT_EQ(0.0, filtered_path[i].pose.orientation.x);
+    EXPECT_EQ(0.0, filtered_path[i].pose.orientation.y);
+    EXPECT_FLOAT_EQ(0.0, tf2::getYaw(filtered_path[i].pose.orientation));
+  }
+
+  // Last orientation should be unaltered
+  EXPECT_EQ(0.0, filtered_path.back().pose.orientation.x);
+  EXPECT_EQ(0.0, filtered_path.back().pose.orientation.y);
+  EXPECT_FLOAT_EQ(-0.12, tf2::getYaw(filtered_path.back().pose.orientation));
+}
+
+TEST(OrientationToolsTests, test_zigzag)
+{
+  // This is an entirely unlikely path
+  // Any global planner creating this path should be garbage collected
+  std::vector<geometry_msgs::PoseStamped> path;
+  for (size_t i = 0; i < 20; ++i)
+  {
+    geometry_msgs::PoseStamped pose;
+    pose.pose.position.x = i * 0.05;
+    if (i % 2 == 0)
+    {
+      pose.pose.position.y = 0.15;
+    }
+    else
+    {
+      pose.pose.position.y = 0.0;
+    }
+    pose.pose.orientation.w = 1.0;
+    path.push_back(pose);
+  }
+
+  // Apply orientations
+  path = addOrientations(path);
+
+  // Now filter this awful path
+  std::vector<geometry_msgs::PoseStamped> filtered_path;
+  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */);
+
+  // Should have removed some poses
+  EXPECT_EQ(6, static_cast<int>(filtered_path.size()));
+
+  // Make sure the distance between remaining poses isn't too far
+  for (size_t i = 1; i < filtered_path.size(); ++i)
+  {
+    double dx = filtered_path[i].pose.position.x - filtered_path[i-1].pose.position.x;
+    double dy = filtered_path[i].pose.position.y - filtered_path[i-1].pose.position.y;
+    EXPECT_TRUE(std::hypot(dx, dy) < 0.25);
   }
 }
 
