@@ -49,6 +49,7 @@
 #include <base_local_planner/odometry_helper_ros.h>
 #include <costmap_2d/footprint.h>
 #include <graceful_controller/graceful_controller.hpp>
+#include <graceful_controller_ros/orientation_filter.hpp>
 #include <std_msgs/Float32.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -561,24 +562,9 @@ public:
 
     // Filter noisy orientations
     std::vector<geometry_msgs::PoseStamped> filtered_plan;
-    filtered_plan.reserve(oriented_plan.size());
-    filtered_plan.push_back(oriented_plan.front());
-    for (size_t i = 1; i < oriented_plan.size() - 1; ++i)
-    {
-      // Compare to before and after
-      if (angles::shortest_angular_distance(tf2::getYaw(filtered_plan.back().pose.orientation),
-                                            tf2::getYaw(oriented_plan[i].pose.orientation)) < yaw_filter_tolerance_)
-      {
-        filtered_plan.push_back(oriented_plan[i]);
-      }
-      else
-      {
-        ROS_DEBUG_NAMED("graceful_controller", "Filtering pose %lu", i);
-      }
-    }
-    filtered_plan.push_back(oriented_plan.back());
-    ROS_DEBUG_NAMED("graceful_controller", "Filtered %lu points from plan", oriented_plan.size() - filtered_plan.size());
+    filtered_plan = apply_orientation_filter(oriented_plan, yaw_filter_tolerance_);
 
+    // Store the plan for computeVelocityCommands
     if (planner_util_.setPlan(filtered_plan))
     {
       has_new_path_ = true;
