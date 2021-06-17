@@ -36,6 +36,8 @@
 * Author: Michael Ferguson
 *********************************************************************/
 
+#include <stdio.h>
+
 #include <ros/ros.h>
 #include <angles/angles.h>
 #include <tf2/utils.h>  // getYaw
@@ -81,7 +83,8 @@ addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
 
 std::vector<geometry_msgs::PoseStamped>
 applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
-                       double yaw_tolerance)
+                       double yaw_tolerance,
+                       double gap_tolerance)
 {
 	std::vector<geometry_msgs::PoseStamped> filtered_path;
   filtered_path.reserve(path.size());
@@ -110,11 +113,23 @@ applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
       setYaw(filtered_path.back(), yaw_previous);
       // Add this pose to the filtered plan
       filtered_path.push_back(path[i]);
+      std::cout << "keeping " << i << std::endl;
+    }
+    else if (std::hypot(path[i].pose.position.x - filtered_path.back().pose.position.x,
+                        path[i].pose.position.y - filtered_path.back().pose.position.y) >= gap_tolerance)
+    {
+      ROS_DEBUG_NAMED("orientation_filter", "Including pose %lu to meet max_separation_dist", i);
+      // Update previous heading in case we dropped some poses
+      setYaw(filtered_path.back(), yaw_previous);
+      // Add this pose to the filtered plan
+      filtered_path.push_back(path[i]);
+      std::cout << "including " << i << std::endl;
     }
     else
     {
       // Sorry pose, the plan is better without you :(
       ROS_DEBUG_NAMED("orientation_filter", "Filtering pose %lu", i);
+      std::cout << "filtering " << i << std::endl;
     }
   }
 

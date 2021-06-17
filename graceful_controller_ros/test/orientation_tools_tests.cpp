@@ -90,7 +90,7 @@ TEST(OrientationToolsTests, test_bad_penultimate_pose)
 
   // Now filter the penultimate pose away
   std::vector<geometry_msgs::PoseStamped> filtered_path;
-  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */);
+  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */, 0.25);
 
   // Should have removed one pose (penultimate one)
   EXPECT_EQ(9, static_cast<int>(filtered_path.size()));
@@ -162,7 +162,7 @@ TEST(OrientationToolsTests, test_bad_initial_pose)
 
   // Now filter the initial pose away
   std::vector<geometry_msgs::PoseStamped> filtered_path;
-  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */);
+  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */, 0.25);
 
   // Should have removed one pose
   EXPECT_EQ(9, static_cast<int>(filtered_path.size()));
@@ -212,7 +212,7 @@ TEST(OrientationToolsTests, test_zigzag)
 
   // Now filter this awful path
   std::vector<geometry_msgs::PoseStamped> filtered_path;
-  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */);
+  filtered_path = applyOrientationFilter(path, 0.785 /* 45 degrees */, 1.0);
 
   // Should have removed some poses
   EXPECT_EQ(6, static_cast<int>(filtered_path.size()));
@@ -224,6 +224,76 @@ TEST(OrientationToolsTests, test_zigzag)
     double dy = filtered_path[i].pose.position.y - filtered_path[i-1].pose.position.y;
     EXPECT_TRUE(std::hypot(dx, dy) < 0.25);
   }
+}
+
+TEST(OrientationToolsTests, test_path_max_separation_dist)
+{
+  // This test verifies that poses do not exceed the max separation distance
+  std::vector<geometry_msgs::PoseStamped> path;
+
+  // Initial pose is at origin
+  geometry_msgs::PoseStamped pose;
+  pose.pose.position.x = 0.0;
+  pose.pose.position.y = 0.0;
+  pose.pose.orientation.w = 1.0;
+  path.push_back(pose);
+
+  // Next pose is back just a bit
+  pose.pose.position.x = -0.05;
+  pose.pose.position.y = -0.01;
+  path.push_back(pose);
+
+  // Add remaining poses
+  for (size_t i = 0; i < 8; ++i)
+  {
+    pose.pose.position.x = -0.1;
+    pose.pose.position.y = -0.01 + i * 0.05;
+    path.push_back(pose);
+  }
+
+  // Update final pose to have a rotation
+  {
+    double final_yaw = 1.0;
+    path.back().pose.orientation.z = sin(final_yaw / 2.0);
+    path.back().pose.orientation.w = cos(final_yaw / 2.0);
+  }
+
+  // Apply orientations
+  path = addOrientations(path);
+
+  // Last orientation should be unaltered
+  EXPECT_EQ(0.0, path.back().pose.orientation.x);
+  EXPECT_EQ(0.0, path.back().pose.orientation.y);
+  EXPECT_FLOAT_EQ(1.0, tf2::getYaw(path.back().pose.orientation));
+
+  // Initial pose orientation should be way back
+  EXPECT_EQ(0.0, path.front().pose.orientation.x);
+  EXPECT_EQ(0.0, path.front().pose.orientation.y);
+  EXPECT_FLOAT_EQ(-2.9441972, tf2::getYaw(path.front().pose.orientation));
+
+  // Second pose orientation should be straight back
+  EXPECT_EQ(0.0, path[1].pose.orientation.x);
+  EXPECT_EQ(0.0, path[1].pose.orientation.y);
+  EXPECT_FLOAT_EQ(3.1415927, tf2::getYaw(path[1].pose.orientation));
+
+  // Other orientations should be up
+  for (size_t i = 2; i < 9; ++i)
+  {
+    EXPECT_EQ(0.0, path[i].pose.orientation.x);
+    EXPECT_EQ(0.0, path[i].pose.orientation.y);
+    EXPECT_FLOAT_EQ(1.5707964, tf2::getYaw(path[i].pose.orientation));
+  }
+
+  // Now filter (without a max separation distance)
+  std::vector<geometry_msgs::PoseStamped> filtered_path;
+  filtered_path = applyOrientationFilter(path, 0.1, 10.0);
+  // Removes lots of poses
+  EXPECT_EQ(3, static_cast<int>(filtered_path.size()));
+
+  // Now filter with decent max separation distance
+  filtered_path = applyOrientationFilter(path, 0.1, 0.15);
+  // Removes not so many poses
+  EXPECT_EQ(7, static_cast<int>(filtered_path.size()));
 }
 
 int main(int argc, char** argv)

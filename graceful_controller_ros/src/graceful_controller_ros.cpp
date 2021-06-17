@@ -181,6 +181,8 @@ public:
       // Optionally filter plan for poses with large difference in heading
       yaw_filter_tolerance_ = 0.785;  // default of 45 degrees
       private_nh.getParam("yaw_filter_tolerance", yaw_filter_tolerance_);
+      yaw_gap_tolerance_ = 0.25;
+      private_nh.getParam("yaw_gap_tolerance", yaw_gap_tolerance_);
 
       initialized_ = true;
 
@@ -548,7 +550,7 @@ public:
 
     // Filter noisy orientations
     std::vector<geometry_msgs::PoseStamped> filtered_plan;
-    filtered_plan = applyOrientationFilter(oriented_plan, yaw_filter_tolerance_);
+    filtered_plan = applyOrientationFilter(oriented_plan, yaw_filter_tolerance_, yaw_gap_tolerance_);
 
     // Store the plan for computeVelocityCommands
     if (planner_util_.setPlan(filtered_plan))
@@ -644,6 +646,7 @@ private:
   double resolution_;
   double acc_dt_;
   double yaw_filter_tolerance_;
+  double yaw_gap_tolerance_;
   bool prefer_final_rotation_;
 
   // Controls initial rotation towards path
