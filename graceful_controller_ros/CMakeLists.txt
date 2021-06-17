@@ -26,6 +26,8 @@ generate_dynamic_reconfigure_options(
 )
 
 catkin_package(
+  INCLUDE_DIRS
+    include
   CATKIN_DEPENDS
     base_local_planner
     costmap_2d
@@ -48,11 +50,13 @@ if (CATKIN_ENABLE_TESTING AND ENABLE_COVERAGE_TESTING)
 endif()
 
 include_directories(
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
 add_library(graceful_controller_ros
   src/graceful_controller_ros.cpp
+  src/orientation_tools.cpp
 )
 target_link_libraries(graceful_controller_ros
   ${catkin_LIBRARIES}
@@ -74,6 +78,14 @@ if(CATKIN_ENABLE_TESTING)
   )
   add_dependencies(tests graceful_controller_tests)
   add_rostest(test/graceful_controller.test)
+
+  catkin_add_gtest(orientation_filter_tests
+    src/orientation_tools.cpp
+    test/orientation_tools_tests.cpp
+  )
+  target_link_libraries(orientation_filter_tests
+    ${catkin_LIBRARIES}
+  )
 
   if(ENABLE_COVERAGE_TESTING)
     set(COVERAGE_EXCLUDES "*/${PROJECT_NAME}/test*")

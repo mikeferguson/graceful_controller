@@ -49,6 +49,7 @@
 #include <base_local_planner/odometry_helper_ros.h>
 #include <costmap_2d/footprint.h>
 #include <graceful_controller/graceful_controller.hpp>
+#include <graceful_controller_ros/orientation_tools.hpp>
 #include <std_msgs/Float32.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -543,42 +544,13 @@ public:
 
     // We need orientations on our poses
     std::vector<geometry_msgs::PoseStamped> oriented_plan;
-    oriented_plan.resize(plan.size());
-
-    // Copy the only oriented pose
-    oriented_plan.back() = plan.back();
-
-    // For each pose, point at the next one
-    for (size_t i = 0; i < oriented_plan.size() - 1; ++i)
-    {
-      oriented_plan[i] = plan[i];
-      double dx = plan[i+1].pose.position.x - plan[i].pose.position.x;
-      double dy = plan[i+1].pose.position.y - plan[i].pose.position.y;
-      double yaw = std::atan2(dy, dx);
-      oriented_plan[i].pose.orientation.z = sin(yaw / 2.0);
-      oriented_plan[i].pose.orientation.w = cos(yaw / 2.0);
-    }
+    oriented_plan = addOrientations(plan);
 
     // Filter noisy orientations
     std::vector<geometry_msgs::PoseStamped> filtered_plan;
-    filtered_plan.reserve(oriented_plan.size());
-    filtered_plan.push_back(oriented_plan.front());
-    for (size_t i = 1; i < oriented_plan.size() - 1; ++i)
-    {
-      // Compare to before and after
-      if (angles::shortest_angular_distance(tf2::getYaw(filtered_plan.back().pose.orientation),
-                                            tf2::getYaw(oriented_plan[i].pose.orientation)) < yaw_filter_tolerance_)
-      {
-        filtered_plan.push_back(oriented_plan[i]);
-      }
-      else
-      {
-        ROS_DEBUG_NAMED("graceful_controller", "Filtering pose %lu", i);
-      }
-    }
-    filtered_plan.push_back(oriented_plan.back());
-    ROS_DEBUG_NAMED("graceful_controller", "Filtered %lu points from plan", oriented_plan.size() - filtered_plan.size());
+    filtered_plan = applyOrientationFilter(oriented_plan, yaw_filter_tolerance_);
 
+    // Store the plan for computeVelocityCommands
     if (planner_util_.setPlan(filtered_plan))
     {
       has_new_path_ = true;
