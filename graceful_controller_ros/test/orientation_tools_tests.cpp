@@ -226,9 +226,9 @@ TEST(OrientationToolsTests, test_zigzag)
   }
 }
 
-TEST(OrientationToolsTests, test_path_max_separation_dist)
+TEST(OrientationToolsTests, test_yaw_gap_tolerance)
 {
-  // This test verifies that poses do not exceed the max separation distance
+  // This test verifies that poses do not exceed the yaw_gap_tolerance
   std::vector<geometry_msgs::PoseStamped> path;
 
   // Initial pose is at origin
