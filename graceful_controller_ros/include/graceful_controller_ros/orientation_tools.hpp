@@ -57,11 +57,13 @@ addOrientations(const std::vector<geometry_msgs::PoseStamped>& path);
  * @brief Filter a path for orientation noise.
  * @param path The path to be filtered.
  * @param yaw_tolerance Maximum deviation allowed before a pose is filtered.
+ * @param gap_tolerance Maximum distance between poses in the filtered path.
  * @returns The filtered path.
  */
 std::vector<geometry_msgs::PoseStamped>
 applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
-                       double yaw_tolerance);
+                       double yaw_tolerance,
+                       double gap_tolerance);
 
 }  // namespace graceful_controller
 

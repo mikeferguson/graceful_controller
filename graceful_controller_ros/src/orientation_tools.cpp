@@ -81,7 +81,8 @@ addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
 
 std::vector<geometry_msgs::PoseStamped>
 applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
-                       double yaw_tolerance)
+                       double yaw_tolerance,
+                       double gap_tolerance)
 {
 	std::vector<geometry_msgs::PoseStamped> filtered_path;
   filtered_path.reserve(path.size());
@@ -106,6 +107,15 @@ applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
     if (fabs(angles::shortest_angular_distance(yaw_previous, yaw_without)) < yaw_tolerance &&
         fabs(angles::shortest_angular_distance(yaw_this, yaw_without)) < yaw_tolerance)
     {
+      // Update previous heading in case we dropped some poses
+      setYaw(filtered_path.back(), yaw_previous);
+      // Add this pose to the filtered plan
+      filtered_path.push_back(path[i]);
+    }
+    else if (std::hypot(path[i].pose.position.x - filtered_path.back().pose.position.x,
+                        path[i].pose.position.y - filtered_path.back().pose.position.y) >= gap_tolerance)
+    {
+      ROS_DEBUG_NAMED("orientation_filter", "Including pose %lu to meet max_separation_dist", i);
       // Update previous heading in case we dropped some poses
       setYaw(filtered_path.back(), yaw_previous);
       // Add this pose to the filtered plan
