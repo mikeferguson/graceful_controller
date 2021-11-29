@@ -487,6 +487,13 @@ public:
                         yaw,
                         costmap_ros_))
         {
+          if (has_new_path_)
+          {
+            // We are unable to turn in place without hitting something
+            // Instead, try approaching with a less desirable sweeping arc
+            ROS_WARN("Unable to rotate towards path");
+            has_new_path_ = false;
+          }
           // Reason will be printed in function
           break;
         }

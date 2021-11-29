@@ -84,7 +84,7 @@ applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
                        double yaw_tolerance,
                        double gap_tolerance)
 {
-	std::vector<geometry_msgs::PoseStamped> filtered_path;
+  std::vector<geometry_msgs::PoseStamped> filtered_path;
   filtered_path.reserve(path.size());
 
   // Always keep the first pose
