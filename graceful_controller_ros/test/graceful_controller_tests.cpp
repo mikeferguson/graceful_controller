@@ -96,8 +96,10 @@ public:
 
   ~ControllerFixture()
   {
+    // Stop costmap updates - otherwise this can fail with a boost::lock issue
+    costmap_ros_->stop();
+    // Stop our own update thread
     shutdown_ = true;
-    thread_->interrupt();
     thread_->join();
     delete thread_;
   }
