@@ -36,10 +36,10 @@ is potentially helpful in debugging parameter tuning issues.
 The underlying control law has several parameters which are best described
 by the original paper, these include:
 
- * **k1** - controls convergence of control law.
- * **k2** - controls convergence of control law.
- * **lambda** - controls speed scaling based on curvature.
- * **beta** - controls speed scaling based on curvature.
+ * **k1** - controls convergence of control law (slow subsystem). A value of 0 reduces the controller to pure waypoint-following with no curvature. For a high k1 value, theta will be reduced faster than r.
+ * **k2** - controls convergence of control law (fast subsystem). A higher value of k2 will reduce the distance of the path to the target, thus decreasing the path's curvature.
+ * **lambda** - controls speed scaling based on curvature. A higher value of lambda results in more sharply peaked curves.
+ * **beta** - controls speed scaling based on curvature. A higher value of beta lets the robot's velocity drop more quickly as K increases. K is the curvature of the path resulting from the control law (based on k1 and k2).
 
 Several parameters are used for selecting and simulating the target pose used
 to compute the control law:
