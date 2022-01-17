@@ -1,0 +1,38 @@
+GracefulControllerROS:
+  max_vel_x: 1.0
+  min_vel_x: 0.25
+
+  max_vel_theta: 2.5
+  min_vel_theta: 0.3
+  min_in_place_vel_theta: 0.6
+
+  acc_lim_x: 0.5
+  acc_lim_theta: 1.0
+
+  max_lookahead: 1.0
+  initial_rotate_tolerance: 0.25
+
+  use_vel_topic: true
+  odom_topic: "odom"
+
+costmap:
+  global_frame: odom
+  robot_base_frame: base_link
+  rolling_window: true
+  update_frequency: 5.0
+  publish_frequency: 2.0
+  robot_radius: 0.25
+  inflater:
+    inflation_radius: 0.5
+  width: 4.0
+  height: 4.0
+  resolution: 0.05
+  plugins:
+  - {name: static_map, type: "costmap_2d::StaticLayer"}
+  - {name: inflater,   type: "costmap_2d::InflationLayer"}
+
+# This test uses a non-round footprint
+footprint: [[-0.5, -0.25], [-0.5, 0.25], [0.5, 0.25], [0.5, -0.25]]
+
+# This parameter is used by test to note the non-round footprint
+nonround: true

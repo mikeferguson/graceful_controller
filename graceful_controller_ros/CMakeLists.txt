@@ -78,6 +78,7 @@ if(CATKIN_ENABLE_TESTING)
   )
   add_dependencies(tests graceful_controller_tests)
   add_rostest(test/graceful_controller.test)
+  add_rostest(test/graceful_controller_nonround.test)
 
   catkin_add_gtest(orientation_filter_tests
     src/orientation_tools.cpp

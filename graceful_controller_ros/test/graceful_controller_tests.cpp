@@ -2,7 +2,7 @@
 *
 * Software License Agreement (BSD License)
 *
-*  Copyright (c) 2021, Michael Ferguson
+*  Copyright (c) 2021-2022, Michael Ferguson
 *  Copyright (c) 2009, Willow Garage, Inc.
 *  All rights reserved.
 *
@@ -228,6 +228,8 @@ protected:
       ros::spinOnce();
       r.sleep();
     }
+
+    ROS_WARN("updateThread exiting");
   }
 
   pluginlib::ClassLoader<nav_core::BaseLocalPlanner> loader_;
@@ -246,6 +248,8 @@ protected:
 
 TEST(ControllerTests, test_basic_plan)
 {
+  // These messages are WARN so that they show up in console output
+  ROS_WARN("STARTED test_basic_plan");
   ControllerFixture fixture;
   ASSERT_TRUE(fixture.setup(false /* do not intialize */));
   boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
@@ -319,10 +323,12 @@ TEST(ControllerTests, test_basic_plan)
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 1.0);
   EXPECT_EQ(command.angular.z, 0.0);
+  ROS_WARN("FINISHED test_basic_plan");
 }
 
 TEST(ControllerTests, test_out_of_range)
 {
+  ROS_WARN("STARTED test_out_of_range");
   ControllerFixture fixture;
   ASSERT_TRUE(fixture.setup());
   boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
@@ -339,13 +345,22 @@ TEST(ControllerTests, test_out_of_range)
   // First pose is beyond the lookahead - should fail
   geometry_msgs::Twist command;
   EXPECT_FALSE(controller->computeVelocityCommands(command));
+  ROS_WARN("FINISHED test_out_of_range");
 }
 
 TEST(ControllerTests, test_initial_rotate_in_place)
 {
+  ROS_WARN("STARTED test_initial_rotate_in_place");
   ControllerFixture fixture;
   ASSERT_TRUE(fixture.setup());
   boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
+
+  bool nonround = false;
+  ros::NodeHandle("~").param<bool>("nonround", nonround, false);
+  if (nonround)
+  {
+    ROS_WARN("Running tests for NON-ROUND configuration.");
+  }
 
   std::vector<geometry_msgs::PoseStamped> plan;
   geometry_msgs::PoseStamped pose;
@@ -359,15 +374,28 @@ TEST(ControllerTests, test_initial_rotate_in_place)
   plan.push_back(pose);
   EXPECT_TRUE(controller->setPlan(plan));
 
+  // Mark a cell to the side of us (away from goal)
+  fixture.markMap(0.45, 0);
+  ros::Duration(0.25).sleep();
+
   // Set our velocity to 0
   fixture.setSimVelocity(0.0, 0.0);
   ros::Duration(0.25).sleep();
 
   // Odom reports velocity = 0, but min_in_place_vel_theta is 0.6
   geometry_msgs::Twist command;
-  EXPECT_TRUE(controller->computeVelocityCommands(command));
-  EXPECT_EQ(command.linear.x, 0.0);
-  EXPECT_EQ(command.angular.z, 0.6);
+  if (nonround)
+  {
+    // The non-round robot cannot turn in-place due to obstacle next to it
+    EXPECT_FALSE(controller->computeVelocityCommands(command));
+    return;
+  }
+  else
+  {
+    EXPECT_TRUE(controller->computeVelocityCommands(command));
+    EXPECT_EQ(command.linear.x, 0.0);
+    EXPECT_EQ(command.angular.z, 0.6);
+  }
 
   // Set our velocity to 1.0
   fixture.setSimVelocity(0.0, 1.0);
@@ -386,10 +414,12 @@ TEST(ControllerTests, test_initial_rotate_in_place)
   EXPECT_TRUE(controller->computeVelocityCommands(command));
   EXPECT_EQ(command.linear.x, 0.0);
   EXPECT_EQ(command.angular.z, 2.5);
+  ROS_WARN("FINISHED test_initial_rotate_in_place");
 }
 
 TEST(ControllerTests, test_final_rotate_in_place)
 {
+  ROS_WARN("STARTED test_final_rotate_in_place");
   ControllerFixture fixture;
   ASSERT_TRUE(fixture.setup());
   boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
@@ -422,10 +452,12 @@ TEST(ControllerTests, test_final_rotate_in_place)
   EXPECT_EQ(command.linear.x, 0.0);
   EXPECT_EQ(command.angular.z, -0.6);
   EXPECT_FALSE(controller->isGoalReached());
+  ROS_WARN("FINISHED test_final_rotate_in_place");
 }
 
 TEST(ControllerTests, test_collision_check)
 {
+  ROS_WARN("STARTED test_collision_check");
   ControllerFixture fixture;
   ASSERT_TRUE(fixture.setup());
   boost::shared_ptr<nav_core::BaseLocalPlanner> controller = fixture.getController();
@@ -445,6 +477,7 @@ TEST(ControllerTests, test_collision_check)
   // Expect no command
   geometry_msgs::Twist command;
   EXPECT_FALSE(controller->computeVelocityCommands(command));
+  ROS_WARN("FINISHED test_collision_check");
 }
 
 int main(int argc, char** argv)
