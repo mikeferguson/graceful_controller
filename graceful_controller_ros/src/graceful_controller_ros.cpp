@@ -234,6 +234,7 @@ public:
     acc_lim_theta_ = config.acc_lim_theta;
     xy_goal_tolerance_ = config.xy_goal_tolerance;
     yaw_goal_tolerance_ = config.yaw_goal_tolerance;
+    min_lookahead_ = config.min_lookahead;
     max_lookahead_ = config.max_lookahead;
     initial_rotate_tolerance_ = config.initial_rotate_tolerance;
     resolution_ = planner_util_.getCostmap()->getResolution();
@@ -359,17 +360,26 @@ public:
       tf2::doTransform(transformed_plan[i], target_pose, odom_to_base);
 
       // Continue if target_pose is too far away from robot
-      if (std::hypot(target_pose.pose.position.x, target_pose.pose.position.y) > max_lookahead_)
+      double dist_to_target = std::hypot(target_pose.pose.position.x, target_pose.pose.position.y);
+      if (dist_to_target > max_lookahead_)
       {
         continue;
       }
 
-      // Avoid unstability and big sweeping turns at the end of paths by ignoring final heading
-      if (prefer_final_rotation_ && (dist_to_goal < max_lookahead_))
+      if (dist_to_goal < max_lookahead_)
       {
-        double yaw = std::atan2(target_pose.pose.position.y, target_pose.pose.position.x);
-        target_pose.pose.orientation.z = sin(yaw / 2.0);
-        target_pose.pose.orientation.w = cos(yaw / 2.0);
+        if (prefer_final_rotation_)
+        {
+          // Avoid unstability and big sweeping turns at the end of paths by ignoring final heading
+          double yaw = std::atan2(target_pose.pose.position.y, target_pose.pose.position.x);
+          target_pose.pose.orientation.z = sin(yaw / 2.0);
+          target_pose.pose.orientation.w = cos(yaw / 2.0);
+        }
+      }
+      else if (dist_to_target < min_lookahead_)
+      {
+        // Make sure target is far enough away to avoid instability
+        break;
       }
 
       // Configure controller max velocity based on current speed
@@ -642,6 +652,7 @@ private:
   double acc_lim_theta_;
   double xy_goal_tolerance_;
   double yaw_goal_tolerance_;
+  double min_lookahead_;
   double max_lookahead_;
   double resolution_;
   double acc_dt_;
