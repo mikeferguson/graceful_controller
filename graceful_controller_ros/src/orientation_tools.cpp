@@ -64,6 +64,11 @@ addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
 {
   std::vector<geometry_msgs::PoseStamped> oriented_path;
   oriented_path.resize(path.size());
+  if (path.empty())
+  {
+    // This really shouldn't happen
+    return oriented_path;
+  }
 
   // The last pose will already be oriented since it is our goal
   oriented_path.back() = path.back();
@@ -86,6 +91,11 @@ applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
 {
 	std::vector<geometry_msgs::PoseStamped> filtered_path;
   filtered_path.reserve(path.size());
+  if (path.empty())
+  {
+    // This really shouldn't happen
+    return filtered_path;
+  }
 
   // Always keep the first pose
   filtered_path.push_back(path.front());
