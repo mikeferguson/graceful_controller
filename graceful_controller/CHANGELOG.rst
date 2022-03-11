@@ -2,6 +2,9 @@
 Changelog for package graceful_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 0.4.0 (2021-06-14)
 ------------------
 

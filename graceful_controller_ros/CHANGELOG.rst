@@ -2,6 +2,22 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* add ability to disable orientation filtering (`#26 <https://github.com/mikeferguson/graceful_controller/issues/26>`_)
+  also make everything dynamic reconfigurable
+* don't crash when path is empty (`#25 <https://github.com/mikeferguson/graceful_controller/issues/25>`_)
+* add min_lookahead parameter (`#24 <https://github.com/mikeferguson/graceful_controller/issues/24>`_)
+  when the pose is very close to the robot, we can get
+  some instability (rapid side-to-side movement due to
+  large angular errors over small linear distances). by
+  adding this parameter, we can instead fallback to
+  recovery behaviors and find a better path.
+* fix occasional boost::lock crash (`#23 <https://github.com/mikeferguson/graceful_controller/issues/23>`_)
+* limit the distance between poses as filter runs (`#21 <https://github.com/mikeferguson/graceful_controller/issues/21>`_)
+* improve the orientation filter, add tests (`#20 <https://github.com/mikeferguson/graceful_controller/issues/20>`_)
+* Contributors: Michael Ferguson
+
 0.4.0 (2021-06-14)
 ------------------
 * add usage documentation (`#19 <https://github.com/mikeferguson/graceful_controller/issues/19>`_)
