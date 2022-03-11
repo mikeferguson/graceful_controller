@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.1 (2022-03-11)
+------------------
 * add ability to disable orientation filtering (`#26 <https://github.com/mikeferguson/graceful_controller/issues/26>`_)
   also make everything dynamic reconfigurable
 * don't crash when path is empty (`#25 <https://github.com/mikeferguson/graceful_controller/issues/25>`_)
