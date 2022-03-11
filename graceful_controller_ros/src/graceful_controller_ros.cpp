@@ -174,23 +174,13 @@ public:
                          boost::bind(&GracefulControllerROS::velocityCallback, this, _1));
       }
 
-      // Optionally prefer to do a final in-place rotation rather than gracefull approach final pose
-      prefer_final_rotation_ = false;
-      private_nh.getParam("prefer_final_rotation", prefer_final_rotation_);
-
-      // Optionally filter plan for poses with large difference in heading
-      yaw_filter_tolerance_ = 0.785;  // default of 45 degrees
-      private_nh.getParam("yaw_filter_tolerance", yaw_filter_tolerance_);
-      yaw_gap_tolerance_ = 0.25;
-      private_nh.getParam("yaw_gap_tolerance", yaw_gap_tolerance_);
-
-      initialized_ = true;
-
       // Dynamic reconfigure is really only intended for tuning controller!
       dsrv_ = new dynamic_reconfigure::Server<GracefulControllerConfig>(private_nh);
       dynamic_reconfigure::Server<GracefulControllerConfig>::CallbackType cb =
         boost::bind(&GracefulControllerROS::reconfigureCallback, this, _1, _2);
       dsrv_->setCallback(cb);
+
+      initialized_ = true;
     }
     else
     {
@@ -237,6 +227,11 @@ public:
     min_lookahead_ = config.min_lookahead;
     max_lookahead_ = config.max_lookahead;
     initial_rotate_tolerance_ = config.initial_rotate_tolerance;
+    prefer_final_rotation_ = config.prefer_final_rotation;
+    compute_orientations_ = config.compute_orientations;
+    use_orientation_filter_ = config.use_orientation_filter;
+    yaw_filter_tolerance_ = config.yaw_filter_tolerance;
+    yaw_gap_tolerance_ = config.yaw_goal_tolerance;
     resolution_ = planner_util_.getCostmap()->getResolution();
 
     controller_ = std::make_shared<GracefulController>(config.k1,
@@ -556,11 +551,25 @@ public:
 
     // We need orientations on our poses
     std::vector<geometry_msgs::PoseStamped> oriented_plan;
-    oriented_plan = addOrientations(plan);
+    if (compute_orientations_)
+    {
+      oriented_plan = addOrientations(plan);
+    }
+    else
+    {
+      oriented_plan = plan;
+    }
 
-    // Filter noisy orientations
+    // Filter noisy orientations (if desired)
     std::vector<geometry_msgs::PoseStamped> filtered_plan;
-    filtered_plan = applyOrientationFilter(oriented_plan, yaw_filter_tolerance_, yaw_gap_tolerance_);
+    if (use_orientation_filter_)
+    {
+      filtered_plan = applyOrientationFilter(oriented_plan, yaw_filter_tolerance_, yaw_gap_tolerance_);
+    }
+    else
+    {
+      filtered_plan = oriented_plan;
+    }
 
     // Store the plan for computeVelocityCommands
     if (planner_util_.setPlan(filtered_plan))
@@ -659,6 +668,8 @@ private:
   double yaw_filter_tolerance_;
   double yaw_gap_tolerance_;
   bool prefer_final_rotation_;
+  bool compute_orientations_;
+  bool use_orientation_filter_;
 
   // Controls initial rotation towards path
   double initial_rotate_tolerance_;

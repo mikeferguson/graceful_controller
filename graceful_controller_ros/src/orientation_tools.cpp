@@ -89,7 +89,7 @@ applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
                        double yaw_tolerance,
                        double gap_tolerance)
 {
-	std::vector<geometry_msgs::PoseStamped> filtered_path;
+  std::vector<geometry_msgs::PoseStamped> filtered_path;
   filtered_path.reserve(path.size());
   if (path.empty())
   {
@@ -145,7 +145,7 @@ applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
   filtered_path.push_back(path.back());
 
   ROS_DEBUG_NAMED("orientation_filter", "Filtered %lu points from plan", path.size() - filtered_path.size());
-	return filtered_path;
+  return filtered_path;
 }
 
 }  // namespace graceful_controller
