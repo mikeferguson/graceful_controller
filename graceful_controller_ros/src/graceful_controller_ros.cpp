@@ -489,7 +489,7 @@ public:
         tf2::doTransform(next_pose, next_pose, base_to_odom);
         if (isColliding(next_pose.pose.position.x,
                         next_pose.pose.position.y,
-                        yaw,
+                        tf2::getYaw(next_pose.pose.orientation),
                         costmap_ros_))
         {
           // Reason will be printed in function
