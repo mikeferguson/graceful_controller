@@ -232,6 +232,7 @@ public:
     use_orientation_filter_ = config.use_orientation_filter;
     yaw_filter_tolerance_ = config.yaw_filter_tolerance;
     yaw_gap_tolerance_ = config.yaw_goal_tolerance;
+    latch_xy_goal_tolerance_ = config.latch_xy_goal_tolerance;
     resolution_ = planner_util_.getCostmap()->getResolution();
 
     controller_ = std::make_shared<GracefulController>(config.k1,
@@ -314,8 +315,10 @@ public:
                                      goal_pose.pose.position.y - robot_pose_.pose.position.y);
 
     // If we've reached the XY goal tolerance, just rotate
-    if (dist_to_goal < xy_goal_tolerance_)
+    if (dist_to_goal < xy_goal_tolerance_ || goal_tolerance_met_)
     {
+      // Reached goal, latch if desired
+      goal_tolerance_met_ = latch_xy_goal_tolerance_;
       // Compute velocity required to rotate towards goal
       tf2::doTransform(transformed_plan.back(), goal_pose, odom_to_base);
       rotateTowards(goal_pose, cmd_vel);
@@ -579,6 +582,9 @@ public:
       return true;
     }
 
+    // Reset flag
+    goal_tolerance_met_ = false;
+
     // Signal error
     return false;
   }
@@ -670,6 +676,10 @@ private:
   bool prefer_final_rotation_;
   bool compute_orientations_;
   bool use_orientation_filter_;
+
+  // Goal tolerance
+  bool latch_xy_goal_tolerance_;
+  bool goal_tolerance_met_;
 
   // Controls initial rotation towards path
   double initial_rotate_tolerance_;
