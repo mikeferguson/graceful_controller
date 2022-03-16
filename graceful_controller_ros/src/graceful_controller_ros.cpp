@@ -2,7 +2,7 @@
 *
 * Software License Agreement (BSD License)
 *
-*  Copyright (c) 2021, Michael Ferguson
+*  Copyright (c) 2021-2022, Michael Ferguson
 *  Copyright (c) 2009, Willow Garage, Inc.
 *  All rights reserved.
 *
@@ -577,13 +577,12 @@ public:
     // Store the plan for computeVelocityCommands
     if (planner_util_.setPlan(filtered_plan))
     {
+      // Reset flags
       has_new_path_ = true;
+      goal_tolerance_met_ = false;
       ROS_INFO("Recieved a new path with %lu points", filtered_plan.size());
       return true;
     }
-
-    // Reset flag
-    goal_tolerance_met_ = false;
 
     // Signal error
     return false;
