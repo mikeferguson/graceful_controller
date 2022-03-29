@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.2 (2022-03-29)
+------------------
 * fix goal tolerance reset (`#29 <https://github.com/mikeferguson/graceful_controller/issues/29>`_)
 * add latch_xy_goal_tolerance parameter (`#28 <https://github.com/mikeferguson/graceful_controller/issues/28>`_)
 * fix orientation issue with collision checking (`#27 <https://github.com/mikeferguson/graceful_controller/issues/27>`_)
