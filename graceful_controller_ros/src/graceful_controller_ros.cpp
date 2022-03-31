@@ -536,7 +536,9 @@ public:
     double angle = angles::shortest_angular_distance(tf2::getYaw(goal.pose.orientation),
                                                      tf2::getYaw(robot_pose_.pose.orientation));
 
-    return (dist < xy_goal_tolerance_) && (fabs(angle) < yaw_goal_tolerance_);
+    double dist_reached = goal_tolerance_met_ || (dist < xy_goal_tolerance_);
+
+    return dist_reached && (fabs(angle) < yaw_goal_tolerance_);
   }
 
   /**
