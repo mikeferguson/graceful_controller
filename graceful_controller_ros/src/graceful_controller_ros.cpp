@@ -342,6 +342,19 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     return true;
   }
 
+  // Get controller max velocity based on current speed
+  double max_vel_x = max_vel_x_;
+  if (!odom_helper_.getOdomTopic().empty())
+  {
+    // The API of the OdometryHelperROS uses a PoseStamped
+    // but the data returned is velocities (should be a Twist)
+    geometry_msgs::PoseStamped robot_velocity;
+    odom_helper_.getRobotVel(robot_velocity);
+    max_vel_x = robot_velocity.pose.position.x + (acc_lim_x_ * acc_dt_);
+    max_vel_x = std::min(max_vel_x, max_vel_x_);
+    max_vel_x = std::max(max_vel_x, min_vel_x_);
+  }
+
   // Work back from the end of plan to find valid target pose
   for (int i = transformed_plan.size() - 1; i >= 0; --i)
   {
@@ -384,18 +397,8 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
       break;
     }
 
-    // Configure controller max velocity based on current speed
-    if (!odom_helper_.getOdomTopic().empty())
-    {
-      // The API of the OdometryHelperROS uses a PoseStamped
-      // but the data returned is velocities (should be a Twist)
-      geometry_msgs::PoseStamped robot_velocity;
-      odom_helper_.getRobotVel(robot_velocity);
-      double max_vel_x = robot_velocity.pose.position.x + (acc_lim_x_ * acc_dt_);
-      max_vel_x = std::min(max_vel_x, max_vel_x_);
-      max_vel_x = std::max(max_vel_x, min_vel_x_);
-      controller_->setVelocityLimits(min_vel_x_, max_vel_x, max_vel_theta_);
-    }
+    // Configure controller max velocity
+    controller_->setVelocityLimits(min_vel_x_, max_vel_x, max_vel_theta_);
 
     // Simulated path (for debugging/visualization)
     std::vector<geometry_msgs::PoseStamped> simulated_path;
