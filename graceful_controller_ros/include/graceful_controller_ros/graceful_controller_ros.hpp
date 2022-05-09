@@ -142,6 +142,7 @@ private:
   double acc_lim_theta_;
   double scaling_vel_x_;
   double scaling_factor_;
+  double scaling_step_;
   double xy_goal_tolerance_;
   double yaw_goal_tolerance_;
   double min_lookahead_;

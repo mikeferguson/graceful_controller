@@ -262,8 +262,9 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
       std::make_shared<GracefulController>(config.k1, config.k2, config.min_vel_x, config.max_vel_x, config.acc_lim_x,
                                            config.max_vel_theta, config.beta, config.lambda);
 
-  scaling_vel_x_ = config.scaling_vel_x;
+  scaling_vel_x_ = std::max(config.scaling_vel_x, config.min_vel_x);
   scaling_factor_ = config.scaling_factor;
+  scaling_step_ = config.scaling_step;
 }
 
 bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
@@ -411,15 +412,22 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
       break;
     }
 
-    // Configure controller max velocity
-    controller_->setVelocityLimits(min_vel_x_, max_vel_x, max_vel_theta_);
-
-    // Actually find our path
-    if (simulate(target_pose, cmd_vel))
+    // Iteratively try to find a path, incrementally reducing the velocity
+    double sim_velocity = max_vel_x;
+    do
     {
-      // Have valid command
-      return true;
+      // Configure controller max velocity
+      controller_->setVelocityLimits(min_vel_x_, sim_velocity, max_vel_theta_);
+      // Actually simulate our path
+      if (simulate(target_pose, cmd_vel))
+      {
+        // Have valid command
+        return true;
+      }
+      // Reduce velocity and try again for same target_pose
+      sim_velocity -= scaling_step_;
     }
+    while (sim_velocity >= scaling_vel_x_);
   }
 
   ROS_ERROR("No pose in path was reachable");
