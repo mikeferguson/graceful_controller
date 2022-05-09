@@ -61,9 +61,10 @@ double sign(double x)
  * @param y The robot y coordinate in costmap.global frame
  * @param theta The robot rotation in costmap.global frame
  * @param viz Optional message for visualizing collisions
+ * @param inflation Ratio to expand the footprint
  */
 bool isColliding(double x, double y, double theta, costmap_2d::Costmap2DROS* costmap,
-                 visualization_msgs::MarkerArray* viz)
+                 visualization_msgs::MarkerArray* viz, double inflation = 1.0)
 {
   unsigned mx, my;
   if (!costmap->getCostmap()->worldToMap(x, y, mx, my))
@@ -73,7 +74,23 @@ bool isColliding(double x, double y, double theta, costmap_2d::Costmap2DROS* cos
     return true;
   }
 
+  if (inflation < 1.0)
+  {
+    ROS_WARN("Inflation ratio cannot be less than 1.0");
+    inflation = 1.0;
+  }
+
+  // Get footprint (centered around robot)
   std::vector<geometry_msgs::Point> spec = costmap->getRobotFootprint();
+
+  // Expand footprint by desired infation
+  for (size_t i = 0; i < spec.size(); ++i)
+  {
+    spec[i].x *= inflation;
+    spec[i].y *= inflation;
+  }
+
+  // Transform footprint to robot pose
   std::vector<geometry_msgs::Point> footprint;
   costmap_2d::transformFootprint(x, y, theta, spec, footprint);
 
