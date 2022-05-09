@@ -261,6 +261,9 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
   controller_ =
       std::make_shared<GracefulController>(config.k1, config.k2, config.min_vel_x, config.max_vel_x, config.acc_lim_x,
                                            config.max_vel_theta, config.beta, config.lambda);
+
+  scaling_vel_x_ = config.scaling_vel_x;
+  scaling_factor_ = config.scaling_factor;
 }
 
 bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_vel)
@@ -515,10 +518,18 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
       next_pose.pose.orientation.w = cos(yaw / 2.0);
       simulated_path.push_back(next_pose);
 
+      // Compute footprint scaling
+      double footprint_scaling = 1.0;
+      if (vel_x > scaling_vel_x_)
+      {
+        double ratio = (vel_x - scaling_vel_x_) / (max_vel_x - scaling_vel_x_);
+        footprint_scaling += ratio * scaling_factor_;
+      }
+
       // Check next pose for collision
       tf2::doTransform(next_pose, next_pose, base_to_odom);
       if (isColliding(next_pose.pose.position.x, next_pose.pose.position.y, tf2::getYaw(next_pose.pose.orientation),
-                      costmap_ros_, collision_points_))
+                      costmap_ros_, collision_points_, footprint_scaling))
       {
         // Reason will be printed in function
         break;
