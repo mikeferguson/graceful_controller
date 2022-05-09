@@ -60,13 +60,16 @@ double sign(double x)
  * @param x The robot x coordinate in costmap.global frame
  * @param y The robot y coordinate in costmap.global frame
  * @param theta The robot rotation in costmap.global frame
+ * @param viz Optional message for visualizing collisions
  */
-bool isColliding(double x, double y, double theta, costmap_2d::Costmap2DROS* costmap)
+bool isColliding(double x, double y, double theta, costmap_2d::Costmap2DROS* costmap,
+                 visualization_msgs::MarkerArray* viz)
 {
   unsigned mx, my;
   if (!costmap->getCostmap()->worldToMap(x, y, mx, my))
   {
     ROS_DEBUG("Path is off costmap (%f,%f)", x, y);
+    addPointMarker(x, y, true, viz);
     return true;
   }
 
@@ -80,6 +83,7 @@ bool isColliding(double x, double y, double theta, costmap_2d::Costmap2DROS* cos
     if (costmap->getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
     {
       ROS_DEBUG("Collision along path at (%f,%f)", x, y);
+      addPointMarker(x, y, true, viz);
       return true;
     }
     // Done collison checking
@@ -93,15 +97,19 @@ bool isColliding(double x, double y, double theta, costmap_2d::Costmap2DROS* cos
     if (!costmap->getCostmap()->worldToMap(footprint[i].x, footprint[i].y, x0, y0))
     {
       ROS_DEBUG("Footprint point %lu is off costmap", i);
+      addPointMarker(footprint[i].x, footprint[i].y, true, viz);
       return true;
     }
+    addPointMarker(footprint[i].x, footprint[i].y, false, viz);
 
     size_t next = (i + 1) % footprint.size();
     if (!costmap->getCostmap()->worldToMap(footprint[next].x, footprint[next].y, x1, y1))
     {
       ROS_DEBUG("Footprint point %lu is off costmap", next);
+      addPointMarker(footprint[next].x, footprint[next].y, true, viz);
       return true;
     }
+    addPointMarker(footprint[next].x, footprint[next].y, false, viz);
 
     for (base_local_planner::LineIterator line(x0, y0, x1, y1); line.isValid(); line.advance())
     {
@@ -121,6 +129,18 @@ GracefulControllerROS::GracefulControllerROS() : initialized_(false), has_new_pa
 {
 }
 
+GracefulControllerROS::~GracefulControllerROS()
+{
+  if (dsrv_)
+  {
+    delete dsrv_;
+  }
+  if (collision_points_)
+  {
+    delete collision_points_;
+  }
+}
+
 void GracefulControllerROS::initialize(std::string name, tf2_ros::Buffer* tf, costmap_2d::Costmap2DROS* costmap_ros)
 {
   if (!initialized_)
@@ -135,6 +155,17 @@ void GracefulControllerROS::initialize(std::string name, tf2_ros::Buffer* tf, co
     costmap_ros_ = costmap_ros;
     costmap_2d::Costmap2D* costmap = costmap_ros_->getCostmap();
     planner_util_.initialize(tf, costmap, costmap_ros_->getGlobalFrameID());
+
+    bool publish_collision_points = false;
+    private_nh.getParam("publish_collision_points", publish_collision_points);
+    if (publish_collision_points)
+    {
+      // Create publisher
+      collision_point_pub_ = private_nh.advertise<visualization_msgs::MarkerArray>("collision_points", 1);
+
+      // Create message to publish
+      collision_points_ = new visualization_msgs::MarkerArray();
+    }
 
     std::string odom_topic;
     if (private_nh.getParam("odom_topic", odom_topic))
@@ -297,9 +328,13 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     {
       double step = static_cast<double>(i) / static_cast<double>(num_steps);
       double yaw = yaw_start + (step * (yaw_start - yaw_end));
-      if (isColliding(robot_pose_.pose.position.x, robot_pose_.pose.position.y, yaw, costmap_ros_))
+      if (isColliding(robot_pose_.pose.position.x, robot_pose_.pose.position.y, yaw, costmap_ros_, collision_points_))
       {
         ROS_ERROR("Unable to rotate in place due to collision.");
+        if (collision_points_)
+        {
+          collision_point_pub_.publish(*collision_points_);
+        }
         return false;
       }
     }
@@ -310,6 +345,12 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
   // Work back from the end of plan to find valid target pose
   for (int i = transformed_plan.size() - 1; i >= 0; --i)
   {
+    // Clear any previous visualizations
+    if (collision_points_)
+    {
+      collision_points_->markers.resize(0);
+    }
+
     // Underlying control law needs a single target pose, which should:
     //  * Be as far away as possible from the robot (for smoothness)
     //  * But no further than the max_lookahed_ distance
@@ -423,6 +464,10 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
         // We've simulated to the desired pose, can return this result
         base_local_planner::publishPlan(simulated_path, local_plan_pub_);
         target_pose_pub_.publish(target_pose);
+        if (collision_points_)
+        {
+          collision_point_pub_.publish(*collision_points_);
+        }
         return true;
       }
 
@@ -453,12 +498,17 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
       // Check next pose for collision
       tf2::doTransform(next_pose, next_pose, base_to_odom);
       if (isColliding(next_pose.pose.position.x, next_pose.pose.position.y, tf2::getYaw(next_pose.pose.orientation),
-                      costmap_ros_))
+                      costmap_ros_, collision_points_))
       {
         // Reason will be printed in function
         break;
       }
     }
+  }
+
+  if (collision_points_)
+  {
+    collision_point_pub_.publish(*collision_points_);
   }
 
   ROS_ERROR("No pose in path was reachable");
