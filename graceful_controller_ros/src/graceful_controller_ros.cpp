@@ -301,15 +301,15 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
   }
 
   // Get transforms
-  geometry_msgs::TransformStamped odom_to_base, base_to_odom;
+  geometry_msgs::TransformStamped costmap_to_robot;
   try
   {
-    odom_to_base = buffer_->lookupTransform(costmap_ros_->getBaseFrameID(), costmap_ros_->getGlobalFrameID(),
-                                            ros::Time(), ros::Duration(0.5));
-    tf2::Stamped<tf2::Transform> tf2_odom_to_base;
-    tf2::convert(odom_to_base, tf2_odom_to_base);
-    tf2_odom_to_base.setData(tf2_odom_to_base.inverse());
-    base_to_odom = tf2::toMsg(tf2_odom_to_base);
+    costmap_to_robot = buffer_->lookupTransform(costmap_ros_->getBaseFrameID(), costmap_ros_->getGlobalFrameID(),
+                                                ros::Time(), ros::Duration(0.5));
+    tf2::Stamped<tf2::Transform> tf2_costmap_to_robot;
+    tf2::convert(costmap_to_robot, tf2_costmap_to_robot);
+    tf2_costmap_to_robot.setData(tf2_costmap_to_robot.inverse());
+    robot_to_costmap_transform_ = tf2::toMsg(tf2_costmap_to_robot);
   }
   catch (tf2::TransformException& ex)
   {
@@ -335,7 +335,7 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     // Reached goal, latch if desired
     goal_tolerance_met_ = latch_xy_goal_tolerance_;
     // Compute velocity required to rotate towards goal
-    tf2::doTransform(transformed_plan.back(), goal_pose, odom_to_base);
+    tf2::doTransform(transformed_plan.back(), goal_pose, costmap_to_robot);
     rotateTowards(goal_pose, cmd_vel);
     // Check for collisions between our current pose and goal
     double yaw_start = tf2::getYaw(robot_pose_.pose.orientation);
@@ -378,12 +378,6 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
   // Work back from the end of plan to find valid target pose
   for (int i = transformed_plan.size() - 1; i >= 0; --i)
   {
-    // Clear any previous visualizations
-    if (collision_points_)
-    {
-      collision_points_->markers.resize(0);
-    }
-
     // Underlying control law needs a single target pose, which should:
     //  * Be as far away as possible from the robot (for smoothness)
     //  * But no further than the max_lookahed_ distance
@@ -391,7 +385,7 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     geometry_msgs::PoseStamped target_pose;
 
     // Transform potential target pose into base_link
-    tf2::doTransform(transformed_plan[i], target_pose, odom_to_base);
+    tf2::doTransform(transformed_plan[i], target_pose, costmap_to_robot);
 
     // Continue if target_pose is too far away from robot
     double dist_to_target = std::hypot(target_pose.pose.position.x, target_pose.pose.position.y);
@@ -420,129 +414,149 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     // Configure controller max velocity
     controller_->setVelocityLimits(min_vel_x_, max_vel_x, max_vel_theta_);
 
-    // Simulated path (for debugging/visualization)
-    std::vector<geometry_msgs::PoseStamped> simulated_path;
-    // Should we simulate rotation initially
-    bool sim_initial_rotation_ = has_new_path_ && initial_rotate_tolerance_ > 0.0;
-    // Get control and path, iteratively
-    while (true)
+    // Actually find our path
+    if (simulate(target_pose, cmd_vel))
     {
-      // The error between current robot pose and the target pose
-      geometry_msgs::PoseStamped error = target_pose;
-
-      // Extract error_angle
-      double error_angle = tf2::getYaw(error.pose.orientation);
-
-      // Move origin to our current simulated pose
-      if (!simulated_path.empty())
-      {
-        double x = error.pose.position.x - simulated_path.back().pose.position.x;
-        double y = error.pose.position.y - simulated_path.back().pose.position.y;
-
-        double theta = -tf2::getYaw(simulated_path.back().pose.orientation);
-        error.pose.position.x = x * cos(theta) - y * sin(theta);
-        error.pose.position.y = y * cos(theta) + x * sin(theta);
-
-        error_angle += theta;
-        error.pose.orientation.z = sin(error_angle / 2.0);
-        error.pose.orientation.w = cos(error_angle / 2.0);
-      }
-
-      // Compute commands
-      double vel_x, vel_th;
-      if (sim_initial_rotation_)
-      {
-        geometry_msgs::Twist rotation;
-        if (fabs(rotateTowards(error, rotation)) < initial_rotate_tolerance_)
-        {
-          if (simulated_path.empty())
-          {
-            // Current robot pose satisifies initial rotate tolerance
-            ROS_WARN("Done rotating towards path");
-            has_new_path_ = false;
-          }
-          sim_initial_rotation_ = false;
-        }
-        vel_x = rotation.linear.x;
-        vel_th = rotation.angular.z;
-      }
-
-      if (!sim_initial_rotation_)
-      {
-        if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle, vel_x, vel_th))
-        {
-          ROS_ERROR("Unable to compute approach");
-          return false;
-        }
-      }
-
-      if (simulated_path.empty())
-      {
-        // First iteration of simulation, store our commands to the robot
-        cmd_vel.linear.x = vel_x;
-        cmd_vel.angular.z = vel_th;
-      }
-      else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
-      {
-        // We've simulated to the desired pose, can return this result
-        base_local_planner::publishPlan(simulated_path, local_plan_pub_);
-        target_pose_pub_.publish(target_pose);
-        if (collision_points_)
-        {
-          collision_point_pub_.publish(*collision_points_);
-        }
-        return true;
-      }
-
-      // Forward simulate command
-      geometry_msgs::PoseStamped next_pose;
-      next_pose.header.frame_id = costmap_ros_->getBaseFrameID();
-      if (simulated_path.empty())
-      {
-        // Initialize at origin
-        next_pose.pose.orientation.w = 1.0;
-      }
-      else
-      {
-        // Start at last pose
-        next_pose = simulated_path.back();
-      }
-
-      // Generate next pose
-      double dt = (vel_x > 0.0) ? resolution_ / vel_x : 0.1;
-      double yaw = tf2::getYaw(next_pose.pose.orientation);
-      next_pose.pose.position.x += dt * vel_x * cos(yaw);
-      next_pose.pose.position.y += dt * vel_x * sin(yaw);
-      yaw += dt * vel_th;
-      next_pose.pose.orientation.z = sin(yaw / 2.0);
-      next_pose.pose.orientation.w = cos(yaw / 2.0);
-      simulated_path.push_back(next_pose);
-
-      // Compute footprint scaling
-      double footprint_scaling = 1.0;
-      if (vel_x > scaling_vel_x_)
-      {
-        double ratio = (vel_x - scaling_vel_x_) / (max_vel_x - scaling_vel_x_);
-        footprint_scaling += ratio * scaling_factor_;
-      }
-
-      // Check next pose for collision
-      tf2::doTransform(next_pose, next_pose, base_to_odom);
-      if (isColliding(next_pose.pose.position.x, next_pose.pose.position.y, tf2::getYaw(next_pose.pose.orientation),
-                      costmap_ros_, collision_points_, footprint_scaling))
-      {
-        // Reason will be printed in function
-        break;
-      }
+      // Have valid command
+      return true;
     }
   }
 
+  ROS_ERROR("No pose in path was reachable");
+  return false;
+}
+
+bool GracefulControllerROS::simulate(const geometry_msgs::PoseStamped& target_pose, geometry_msgs::Twist& cmd_vel)
+{
+  // Simulated path (for debugging/visualization)
+  std::vector<geometry_msgs::PoseStamped> simulated_path;
+  // Should we simulate rotation initially
+  bool sim_initial_rotation_ = has_new_path_ && initial_rotate_tolerance_ > 0.0;
+  // Clear any previous visualizations
   if (collision_points_)
   {
-    collision_point_pub_.publish(*collision_points_);
+    collision_points_->markers.resize(0);
+  }
+  // Get control and path, iteratively
+  while (true)
+  {
+    // The error between current robot pose and the target pose
+    geometry_msgs::PoseStamped error = target_pose;
+
+    // Extract error_angle
+    double error_angle = tf2::getYaw(error.pose.orientation);
+
+    // Move origin to our current simulated pose
+    if (!simulated_path.empty())
+    {
+      double x = error.pose.position.x - simulated_path.back().pose.position.x;
+      double y = error.pose.position.y - simulated_path.back().pose.position.y;
+
+      double theta = -tf2::getYaw(simulated_path.back().pose.orientation);
+      error.pose.position.x = x * cos(theta) - y * sin(theta);
+      error.pose.position.y = y * cos(theta) + x * sin(theta);
+
+      error_angle += theta;
+      error.pose.orientation.z = sin(error_angle / 2.0);
+      error.pose.orientation.w = cos(error_angle / 2.0);
+    }
+
+    // Compute commands
+    double vel_x, vel_th;
+    if (sim_initial_rotation_)
+    {
+      geometry_msgs::Twist rotation;
+      if (fabs(rotateTowards(error, rotation)) < initial_rotate_tolerance_)
+      {
+        if (simulated_path.empty())
+        {
+          // Current robot pose satisifies initial rotate tolerance
+          ROS_WARN("Done rotating towards path");
+          has_new_path_ = false;
+        }
+        sim_initial_rotation_ = false;
+      }
+      vel_x = rotation.linear.x;
+      vel_th = rotation.angular.z;
+    }
+
+    if (!sim_initial_rotation_)
+    {
+      if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle, vel_x, vel_th))
+      {
+        ROS_ERROR("Unable to compute approach");
+        return false;
+      }
+    }
+
+    if (simulated_path.empty())
+    {
+      // First iteration of simulation, store our commands to the robot
+      cmd_vel.linear.x = vel_x;
+      cmd_vel.angular.z = vel_th;
+    }
+    else if (std::hypot(error.pose.position.x, error.pose.position.y) < resolution_)
+    {
+      // We've simulated to the desired pose, can return this result
+      base_local_planner::publishPlan(simulated_path, local_plan_pub_);
+      target_pose_pub_.publish(target_pose);
+      // Publish visualization if desired
+      if (collision_points_)
+      {
+        collision_point_pub_.publish(*collision_points_);
+      }
+      return true;
+    }
+
+    // Forward simulate command
+    geometry_msgs::PoseStamped next_pose;
+    next_pose.header.frame_id = costmap_ros_->getBaseFrameID();
+    if (simulated_path.empty())
+    {
+      // Initialize at origin
+      next_pose.pose.orientation.w = 1.0;
+    }
+    else
+    {
+      // Start at last pose
+      next_pose = simulated_path.back();
+    }
+
+    // Generate next pose
+    double dt = (vel_x > 0.0) ? resolution_ / vel_x : 0.1;
+    double yaw = tf2::getYaw(next_pose.pose.orientation);
+    next_pose.pose.position.x += dt * vel_x * cos(yaw);
+    next_pose.pose.position.y += dt * vel_x * sin(yaw);
+    yaw += dt * vel_th;
+    next_pose.pose.orientation.z = sin(yaw / 2.0);
+    next_pose.pose.orientation.w = cos(yaw / 2.0);
+    simulated_path.push_back(next_pose);
+
+    // Compute footprint scaling
+    double footprint_scaling = 1.0;
+    if (vel_x > scaling_vel_x_)
+    {
+      double ratio = (vel_x - scaling_vel_x_) / (max_vel_x_ - scaling_vel_x_);
+      footprint_scaling += ratio * scaling_factor_;
+    }
+
+    // Check next pose for collision
+    tf2::doTransform(next_pose, next_pose, robot_to_costmap_transform_);
+    if (isColliding(next_pose.pose.position.x, next_pose.pose.position.y, tf2::getYaw(next_pose.pose.orientation),
+                    costmap_ros_, collision_points_, footprint_scaling))
+    {
+      // Publish visualization if desired
+      if (collision_points_)
+      {
+        collision_point_pub_.publish(*collision_points_);
+      }
+      // Reason will be printed in function
+      return false;
+    }
   }
 
-  ROS_ERROR("No pose in path was reachable");
+  // Really shouldn't hit this
+  ROS_ERROR("Did not reach target_pose, but stopped simulating?");
   return false;
 }
 
