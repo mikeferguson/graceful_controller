@@ -55,13 +55,15 @@
 #include <dynamic_reconfigure/server.h>
 #include <graceful_controller_ros/GracefulControllerConfig.h>
 
+#include "graceful_controller_ros/visualization.hpp"
+
 namespace graceful_controller
 {
 class GracefulControllerROS : public nav_core::BaseLocalPlanner
 {
 public:
   GracefulControllerROS();
-  virtual ~GracefulControllerROS() = default;
+  virtual ~GracefulControllerROS();
 
   /**
    * @brief Constructs the local planner
@@ -148,6 +150,10 @@ private:
   // Controls initial rotation towards path
   double initial_rotate_tolerance_;
   bool has_new_path_;
+
+  // Optional visualization of colliding and non-colliding points checked
+  ros::Publisher collision_point_pub_;
+  visualization_msgs::MarkerArray* collision_points_;
 
   geometry_msgs::PoseStamped robot_pose_;
 };
