@@ -1,40 +1,40 @@
 /*********************************************************************
-*
-* Software License Agreement (BSD License)
-*
-*  Copyright (c) 2021, Michael Ferguson
-*  Copyright (c) 2009, Willow Garage, Inc.
-*  All rights reserved.
-*
-*  Redistribution and use in source and binary forms, with or without
-*  modification, are permitted provided that the following conditions
-*  are met:
-*
-*   * Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   * Redistributions in binary form must reproduce the above
-*     copyright notice, this list of conditions and the following
-*     disclaimer in the documentation and/or other materials provided
-*     with the distribution.
-*   * Neither the name of Willow Garage, Inc. nor the names of its
-*     contributors may be used to endorse or promote products derived
-*     from this software without specific prior written permission.
-*
-*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-*  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-*  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-*  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-*  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-*  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-*  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-*  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-*  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-*  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-*  POSSIBILITY OF SUCH DAMAGE.
-*
-* Author: Michael Ferguson
-*********************************************************************/
+ *
+ * Software License Agreement (BSD License)
+ *
+ *  Copyright (c) 2021, Michael Ferguson
+ *  Copyright (c) 2009, Willow Garage, Inc.
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *   * Neither the name of Willow Garage, Inc. nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Author: Michael Ferguson
+ *********************************************************************/
 
 #include <ros/ros.h>
 #include <angles/angles.h>
@@ -43,10 +43,8 @@
 
 namespace graceful_controller
 {
-
 // Helper function to get yaw if "from" were to point towards "to"
-double getRelativeYaw(const geometry_msgs::PoseStamped& from,
-                      const geometry_msgs::PoseStamped& to)
+double getRelativeYaw(const geometry_msgs::PoseStamped& from, const geometry_msgs::PoseStamped& to)
 {
   double dx = to.pose.position.x - from.pose.position.x;
   double dy = to.pose.position.y - from.pose.position.y;
@@ -59,8 +57,7 @@ void setYaw(geometry_msgs::PoseStamped& pose, double yaw)
   pose.pose.orientation.w = cos(yaw / 2.0);
 }
 
-std::vector<geometry_msgs::PoseStamped>
-addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
+std::vector<geometry_msgs::PoseStamped> addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
 {
   std::vector<geometry_msgs::PoseStamped> oriented_path;
   oriented_path.resize(path.size());
@@ -84,10 +81,8 @@ addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
   return oriented_path;
 }
 
-std::vector<geometry_msgs::PoseStamped>
-applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
-                       double yaw_tolerance,
-                       double gap_tolerance)
+std::vector<geometry_msgs::PoseStamped> applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
+                                                               double yaw_tolerance, double gap_tolerance)
 {
   std::vector<geometry_msgs::PoseStamped> filtered_path;
   filtered_path.reserve(path.size());
@@ -111,7 +106,7 @@ applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
     double yaw_this = tf2::getYaw(path[i].pose.orientation);
 
     // Get the yaw angle if previous pose were to be pointing at next pose, filtering this pose
-    double yaw_without = getRelativeYaw(filtered_path.back(), path[i+1]);
+    double yaw_without = getRelativeYaw(filtered_path.back(), path[i + 1]);
 
     // Determine if this pose is far off a direct line between previous and next pose
     if (fabs(angles::shortest_angular_distance(yaw_previous, yaw_without)) < yaw_tolerance &&
