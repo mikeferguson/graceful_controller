@@ -125,7 +125,7 @@ bool isColliding(double x, double y, double theta, costmap_2d::Costmap2DROS* cos
   return false;
 }
 
-GracefulControllerROS::GracefulControllerROS() : initialized_(false), has_new_path_(false)
+GracefulControllerROS::GracefulControllerROS() : initialized_(false), has_new_path_(false), collision_points_(NULL)
 {
 }
 
