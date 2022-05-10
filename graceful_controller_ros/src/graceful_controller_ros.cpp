@@ -544,7 +544,11 @@ bool GracefulControllerROS::simulate(const geometry_msgs::PoseStamped& target_po
     double footprint_scaling = 1.0;
     if (vel_x > scaling_vel_x_)
     {
-      double ratio = (vel_x - scaling_vel_x_) / (max_vel_x_ - scaling_vel_x_);
+      double ratio = max_vel_x_ - scaling_vel_x_;
+      if (ratio > 0)
+      {
+        ratio = (vel_x - scaling_vel_x_) / ratio;
+      }
       footprint_scaling += ratio * scaling_factor_;
     }
 
