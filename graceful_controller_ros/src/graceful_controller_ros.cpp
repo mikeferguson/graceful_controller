@@ -307,10 +307,10 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
   {
     costmap_to_robot = buffer_->lookupTransform(costmap_ros_->getBaseFrameID(), costmap_ros_->getGlobalFrameID(),
                                                 ros::Time(), ros::Duration(0.5));
-    tf2::Stamped<tf2::Transform> tf2_costmap_to_robot;
-    tf2::convert(costmap_to_robot, tf2_costmap_to_robot);
-    tf2_costmap_to_robot.setData(tf2_costmap_to_robot.inverse());
-    robot_to_costmap_transform_ = tf2::toMsg(tf2_costmap_to_robot);
+    tf2::Stamped<tf2::Transform> tf2_transform;
+    tf2::convert(costmap_to_robot, tf2_transform);
+    tf2_transform.setData(tf2_transform.inverse());
+    robot_to_costmap_transform_ = tf2::toMsg(tf2_transform);
   }
   catch (tf2::TransformException& ex)
   {
