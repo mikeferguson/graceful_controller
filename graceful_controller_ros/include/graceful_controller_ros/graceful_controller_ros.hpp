@@ -111,6 +111,14 @@ public:
 private:
   void velocityCallback(const std_msgs::Float32::ConstPtr& max_vel_x);
 
+  /**
+   * @brief Simulate a path.
+   * @param target_pose Pose to simulate towards.
+   * @param cmd_vel The returned command to execute.
+   * @returns True if the path is valid.
+   */
+  bool simulate(const geometry_msgs::PoseStamped& target_pose, geometry_msgs::Twist& cmd_vel);
+
   ros::Publisher global_plan_pub_, local_plan_pub_, target_pose_pub_;
   ros::Subscriber max_vel_sub_;
 
@@ -119,6 +127,7 @@ private:
 
   tf2_ros::Buffer* buffer_;
   costmap_2d::Costmap2DROS* costmap_ros_;
+  geometry_msgs::TransformStamped robot_to_costmap_transform_;
   base_local_planner::LocalPlannerUtil planner_util_;
   base_local_planner::OdometryHelperRos odom_helper_;
 
@@ -131,6 +140,9 @@ private:
   double min_in_place_vel_theta_;
   double acc_lim_x_;
   double acc_lim_theta_;
+  double scaling_vel_x_;
+  double scaling_factor_;
+  double scaling_step_;
   double xy_goal_tolerance_;
   double yaw_goal_tolerance_;
   double min_lookahead_;
