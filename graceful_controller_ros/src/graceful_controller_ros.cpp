@@ -64,8 +64,8 @@ double sign(double x)
  * @param inflation Ratio to expand the footprint
  */
 bool isColliding(double x, double y, double theta,
-                 nav2_costmap_2d::Costmap2DROS* costmap,
-                 visualization_msgs::MarkerArray* viz, double inflation = 1.0)
+                 std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap,
+                 visualization_msgs::msg::MarkerArray* viz, double inflation = 1.0)
 {
   unsigned mx, my;
   if (!costmap->getCostmap()->worldToMap(x, y, mx, my))
@@ -77,12 +77,12 @@ bool isColliding(double x, double y, double theta,
 
   if (inflation < 1.0)
   {
-    ROS_WARN("Inflation ratio cannot be less than 1.0");
+    //ROS_WARN("Inflation ratio cannot be less than 1.0");
     inflation = 1.0;
   }
 
   // Get footprint (centered around robot)
-  std::vector<geometry_msgs::Point> spec = costmap->getRobotFootprint();
+  std::vector<geometry_msgs::msg::Point> spec = costmap->getRobotFootprint();
 
   // Expand footprint by desired infation
   for (size_t i = 0; i < spec.size(); ++i)
@@ -92,13 +92,13 @@ bool isColliding(double x, double y, double theta,
   }
 
   // Transform footprint to robot pose
-  std::vector<geometry_msgs::Point> footprint;
+  std::vector<geometry_msgs::msg::Point> footprint;
   nav2_costmap_2d::transformFootprint(x, y, theta, spec, footprint);
 
   // If our footprint is less than 4 corners, treat as circle
   if (footprint.size() < 4)
   {
-    if (costmap->getCostmap()->getCost(mx, my) >= costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
+    if (costmap->getCostmap()->getCost(mx, my) >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
     {
       //ROS_DEBUG("Collision along path at (%f,%f)", x, y);
       addPointMarker(x, y, true, viz);
@@ -131,7 +131,7 @@ bool isColliding(double x, double y, double theta,
 
     for (nav2_util::LineIterator line(x0, y0, x1, y1); line.isValid(); line.advance())
     {
-      if (costmap->getCostmap()->getCost(line.getX(), line.getY()) >= costmap_2d::LETHAL_OBSTACLE)
+      if (costmap->getCostmap()->getCost(line.getX(), line.getY()) >= nav2_costmap_2d::LETHAL_OBSTACLE)
       {
         //ROS_DEBUG("Collision along path at (%f,%f)", x, y);
         return true;
@@ -156,9 +156,9 @@ GracefulControllerROS::~GracefulControllerROS()
 }
 
 void GracefulControllerROS::configure(
-  const rclcpp_lifecycle::LifecycleNode::SharedPtr & node,
-  std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
-  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros)
+  const rclcpp_lifecycle::LifecycleNode::WeakPtr & weak_node,
+  std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
   if (initialized_)
   {
@@ -167,73 +167,84 @@ void GracefulControllerROS::configure(
   }
 
   // Save important things
-  node_ = node;
-  clock_ = node->get_clock();
-  logger_ = node->get_logger();
+  node_ = weak_node;
   buffer_ = tf;
   costmap_ros_ = costmap_ros;
   name_ = name;
 
-  // Setup parameters
-  declare_parameter_if_not_declared(node_, name_ + ".max_vel_x");
-  declare_parameter_if_not_declared(node_, name_ + ".min_vel_x");
-  declare_parameter_if_not_declared(node_, name_ + ".max_vel_theta");
-  declare_parameter_if_not_declared(node_, name_ + ".min_vel_theta");
-  declare_parameter_if_not_declared(node_, name_ + ".min_in_place_vel_theta");
-  declare_parameter_if_not_declared(node_, name_ + ".acc_lim_x");
-  declare_parameter_if_not_declared(node_, name_ + ".acc_lim_theta");
-  declare_parameter_if_not_declared(node_, name_ + ".acc_dt", rclcpp::ParameterValue(0.25));
-  declare_parameter_if_not_declared(node_, name_ + ".xy_goal_tolerance");
-  declare_parameter_if_not_declared(node_, name_ + ".max_lookahead", rclcpp::ParameterValue(1.0));
-  declare_parameter_if_not_declared(node_, name_ + ".initial_rotate_tolerance", rclcpp::ParameterValue(0.1));
-  declare_parameter_if_not_declared(node_, name_ + ".use_vel_topic", rclcpp::ParameterValue(false));
-  declare_parameter_if_not_declared(node_, name_ + ".k1", rclcpp::ParameterValue(2.0));
-  declare_parameter_if_not_declared(node_, name_ + ".k2", rclcpp::ParameterValue(1.0));
-  declare_parameter_if_not_declared(node_, name_ + ".beta", rclcpp::ParameterValue(0.4));
-  declare_parameter_if_not_declared(node_, name_ + ".lambda", rclcpp::ParameterValue(2.0));
-  declare_parameter_if_not_declared(node_, name_ + ".publish_collision_points", rclcpp::ParameterValue(false));
-  // TODO: add latch
-  // TODO: add scaling_velocity, factor, scaling_step_
+  auto node = node_.lock();
+  if (!node)
+  {
+    throw std::runtime_error{"Failed to lock node"};
+  }
 
-  node_->get_parameter(name_ + ".max_vel_x", max_vel_x_);
-  node_->get_parameter(name_ + ".min_vel_x", min_vel_x_);
-  node_->get_parameter(name_ + ".max_vel_theta", max_vel_theta_);
-  node_->get_parameter(name_ + ".min_vel_theta", min_vel_theta_);
-  node_->get_parameter(name_ + ".min_in_place_vel_theta", min_in_place_vel_theta_);
-  node_->get_parameter(name_ + ".acc_lim_x", acc_lim_x_);
-  node_->get_parameter(name_ + ".acc_lim_theta", acc_lim_theta_);
-  node_->get_parameter(name_ + ".acc_dt", acc_dt_);
-  node_->get_parameter(name_ + ".xy_goal_tolerance", xy_goal_tolerance_);
-  node_->get_parameter(name_ + ".max_lookahead", max_lookahead_);
-  node_->get_parameter(name_ + ".initial_rotate_tolerance", initial_rotate_tolerance_);
+  clock_ = node->get_clock();
+  logger_ = node->get_logger();
+
+  // Setup parameters
+  declare_parameter_if_not_declared(node, name_ + ".max_vel_x", rclcpp::ParameterValue(0.5));
+  declare_parameter_if_not_declared(node, name_ + ".min_vel_x", rclcpp::ParameterValue(0.1));
+  declare_parameter_if_not_declared(node, name_ + ".max_vel_theta", rclcpp::ParameterValue(1.0));
+  declare_parameter_if_not_declared(node, name_ + ".min_in_place_vel_theta", rclcpp::ParameterValue(0.4));
+  declare_parameter_if_not_declared(node, name_ + ".acc_lim_x", rclcpp::ParameterValue(2.5));
+  declare_parameter_if_not_declared(node, name_ + ".acc_lim_theta", rclcpp::ParameterValue(3.2));
+  declare_parameter_if_not_declared(node, name_ + ".acc_dt", rclcpp::ParameterValue(0.25));
+  declare_parameter_if_not_declared(node, name_ + ".max_lookahead", rclcpp::ParameterValue(1.0));
+  declare_parameter_if_not_declared(node, name_ + ".initial_rotate_tolerance", rclcpp::ParameterValue(0.1));
+  declare_parameter_if_not_declared(node, name_ + ".prefer_final_rotation", rclcpp::ParameterValue(false));
+  declare_parameter_if_not_declared(node, name_ + ".compute_orientations", rclcpp::ParameterValue(true));
+  declare_parameter_if_not_declared(node, name_ + ".use_orientation_filter", rclcpp::ParameterValue(false));
+  declare_parameter_if_not_declared(node, name_ + ".yaw_filter_tolerance", rclcpp::ParameterValue(0.785));
+  declare_parameter_if_not_declared(node, name_ + ".yaw_gap_tolerance", rclcpp::ParameterValue(0.25));
+  declare_parameter_if_not_declared(node, name_ + ".latch_xy_goal_tolerance", rclcpp::ParameterValue(false));
+  declare_parameter_if_not_declared(node, name_ + ".publish_collision_points", rclcpp::ParameterValue(false));
+  declare_parameter_if_not_declared(node, name_ + ".k1", rclcpp::ParameterValue(2.0));
+  declare_parameter_if_not_declared(node, name_ + ".k2", rclcpp::ParameterValue(1.0));
+  declare_parameter_if_not_declared(node, name_ + ".beta", rclcpp::ParameterValue(0.4));
+  declare_parameter_if_not_declared(node, name_ + ".lambda", rclcpp::ParameterValue(2.0));
+  declare_parameter_if_not_declared(node, name_ + ".scaling_vel_x", rclcpp::ParameterValue(0.5));
+  declare_parameter_if_not_declared(node, name_ + ".scaling_factor", rclcpp::ParameterValue(0.0));
+  declare_parameter_if_not_declared(node, name_ + ".scaling_step", rclcpp::ParameterValue(0.1));
+
+  node->get_parameter(name_ + ".max_vel_x", max_vel_x_);
+  node->get_parameter(name_ + ".min_vel_x", min_vel_x_);
+  node->get_parameter(name_ + ".max_vel_theta", max_vel_theta_);
+  node->get_parameter(name_ + ".min_in_place_vel_theta", min_in_place_vel_theta_);
+  node->get_parameter(name_ + ".acc_lim_x", acc_lim_x_);
+  node->get_parameter(name_ + ".acc_lim_theta", acc_lim_theta_);
+  node->get_parameter(name_ + ".acc_dt", acc_dt_);
+  node->get_parameter(name_ + ".max_lookahead", max_lookahead_);
+  node->get_parameter(name_ + ".initial_rotate_tolerance", initial_rotate_tolerance_);
+  node->get_parameter(name_ + ".prefer_final_rotation", prefer_final_rotation_);
+  node->get_parameter(name_ + ".compute_orientations", compute_orientations_);
+  node->get_parameter(name_ + ".use_orientation_filter", use_orientation_filter_);
+  node->get_parameter(name_ + ".yaw_filter_tolerance", yaw_filter_tolerance_);
+  node->get_parameter(name_ + ".yaw_gap_tolerance", yaw_gap_tolerance_);
+  node->get_parameter(name_ + ".latch_xy_goal_tolerance", latch_xy_goal_tolerance_);
+  node->get_parameter(name_ + ".scaling_vel_x_", scaling_vel_x_);
+  node->get_parameter(name_ + ".scaling_factor", scaling_factor_);
+  node->get_parameter(name_ + ".scaling_step", scaling_step_);
   resolution_ = costmap_ros_->getCostmap()->getResolution();
   double k1, k2, beta, lambda;
-  node_->get_parameter(name_ + ".k1", k1);
-  node_->get_parameter(name_ + ".k2", k2);
-  node_->get_parameter(name_ + ".beta", beta);
-  node_->get_parameter(name_ + ".lambda", lambda);
+  node->get_parameter(name_ + ".k1", k1);
+  node->get_parameter(name_ + ".k2", k2);
+  node->get_parameter(name_ + ".beta", beta);
+  node->get_parameter(name_ + ".lambda", lambda);
 
   // Publishers (same topics as DWA/TrajRollout)
-  global_plan_pub_ = node_->create_publisher<nav_msgs::msg::Path>("global_plan", 1);
-  local_plan_pub_ = node_->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
-  target_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>("target_pose", 1);
+  global_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("global_plan", 1);
+  local_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>("local_plan", 1);
+  target_pose_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>("target_pose", 1);
 
   bool publish_collision_points;
-  node_->get_parameter(name_ + ".publish_collision_points", publish_collision_points);
+  node->get_parameter(name_ + ".publish_collision_points", publish_collision_points);
   if (publish_collision_points)
   {
     // Create publisher
-    collision_points_pub_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("collision_points", 1);
+    collision_points_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>("collision_points", 1);
 
     // Create message to publish
     collision_points_ = new visualization_msgs::msg::MarkerArray();
-  }
-
-  bool use_vel_topic = false;
-  node_->get_parameter(name_ + ".use_vel_topic", use_vel_topic);
-  if (use_vel_topic)
-  {
-    max_vel_sub_ = node_->create_subscription<std_msgs::msg::Float32>("max_vel_x", 1, std::bind(&GracefulControllerROS::velocityCallback, this, std::placeholders::_1));
   }
 
   controller_ = std::make_shared<GracefulController>(k1,
@@ -246,6 +257,13 @@ void GracefulControllerROS::configure(
                                                      lambda);
 
   initialized_ = true;
+}
+
+void GracefulControllerROS::cleanup()
+{
+  global_plan_pub_.reset();
+  local_plan_pub_.reset();
+  collision_points_pub_.reset();
 }
 
 void GracefulControllerROS::activate()
@@ -269,16 +287,10 @@ void GracefulControllerROS::deactivate()
   }
 }
 
-void GracefulControllerROS::cleanup()
-{
-  global_plan_pub_.reset();
-  local_plan_pub_.reset();
-  collision_points_pub_.reset();
-}
-
 geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   const geometry_msgs::msg::PoseStamped& robot_pose,
-  const geometry_msgs::msg::Twist& velocity)
+  const geometry_msgs::msg::Twist& velocity,
+  nav2_core::GoalChecker * goal_checker)
 {
   geometry_msgs::msg::TwistStamped cmd_vel;
   cmd_vel.header.frame_id = robot_pose.header.frame_id;
@@ -322,25 +334,30 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   // Get the overall goal
   geometry_msgs::msg::PoseStamped goal_pose = global_plan_.poses.back();
 
+  // Get goal tolerances
+  geometry_msgs::msg::Pose pose_tolerance;
+  geometry_msgs::msg::Twist velocity_tolerance;
+  goal_checker->getTolerances(pose_tolerance, velocity_tolerance);
+
   // Compute distance to goal
   double dist_to_goal = std::hypot(goal_pose.pose.position.x - robot_pose_.pose.position.x,
                                    goal_pose.pose.position.y - robot_pose_.pose.position.y);
 
   // If we've reached the XY goal tolerance, just rotate
-  if (dist_to_goal < xy_goal_tolerance_ || goal_tolerance_met_)
+  if (dist_to_goal < pose_tolerance.position.x || goal_tolerance_met_)
   {
     // Reached goal, latch if desired
     goal_tolerance_met_ = latch_xy_goal_tolerance_;
     // Compute velocity required to rotate towards goal
     geometry_msgs::msg::PoseStamped local_goal_pose;
     tf2::doTransform(global_plan_.poses.back(), local_goal_pose, plan_to_robot);
-    rotateTowards(local_goal_pose, cmd_vel);
+    rotateTowards(local_goal_pose, velocity, cmd_vel);
     // Check for collisions between our current pose and goal
     double yaw_start = tf2::getYaw(robot_pose_.pose.orientation);
     double yaw_end = tf2::getYaw(goal_pose.pose.orientation);
     size_t num_steps = fabs(yaw_end - yaw_start) / 0.1;
     // Need to check at least the end pose
-    num_steps = std::max(1, num_steps);
+    num_steps = std::max(static_cast<size_t>(1), num_steps);
     for (size_t i = 1; i <= num_steps; ++i)
     {
       double step = static_cast<double>(i) / static_cast<double>(num_steps);
@@ -350,7 +367,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
         RCLCPP_ERROR(logger_, "Unable to rotate in place due to collision");
         if (collision_points_)
         {
-          collision_point_pub_.publish(*collision_points_);
+          collision_points_pub_->publish(*collision_points_);
         }
         // Reset to zero velocity
         cmd_vel.twist = geometry_msgs::msg::Twist();
@@ -407,7 +424,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
       // Configure controller max velocity
       controller_->setVelocityLimits(min_vel_x_, sim_velocity, max_vel_theta_);
       // Actually simulate our path
-      if (simulate(target_pose, cmd_vel))
+      if (simulate(target_pose, velocity, cmd_vel))
       {
         // Have valid command
         return cmd_vel;
@@ -422,7 +439,10 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   return cmd_vel;
 }
  
-bool GracefulControllerROS::simulate(const geometry_msgs::msg::PoseStamped& target_pose, geometry_msgs::msg::TwistStampedt& cmd_vel)
+bool GracefulControllerROS::simulate(
+  const geometry_msgs::msg::PoseStamped& target_pose,
+  const geometry_msgs::msg::Twist& velocity,
+  geometry_msgs::msg::TwistStamped& cmd_vel)
 {
   // Simulated path (for debugging/visualization)
   nav_msgs::msg::Path simulated_path;
@@ -462,9 +482,9 @@ bool GracefulControllerROS::simulate(const geometry_msgs::msg::PoseStamped& targ
     if (sim_initial_rotation_)
     {
       geometry_msgs::msg::TwistStamped rotation;
-      if (fabs(rotateTowards(error, rotation)) < initial_rotate_tolerance_)
+      if (fabs(rotateTowards(error, velocity, rotation)) < initial_rotate_tolerance_)
       {
-        if (simulated_path.empty())
+        if (simulated_path.poses.empty())
         {
           // Current robot pose satisifies initial rotate tolerance
           RCLCPP_INFO(logger_, "Done rotating towards path");
@@ -482,7 +502,7 @@ bool GracefulControllerROS::simulate(const geometry_msgs::msg::PoseStamped& targ
                                  vel_x, vel_th))
       {
         RCLCPP_ERROR(logger_, "Unable to compute approach");
-        return cmd_vel;
+        return false;
       }
     }
 
@@ -501,7 +521,7 @@ bool GracefulControllerROS::simulate(const geometry_msgs::msg::PoseStamped& targ
       {
         collision_points_pub_->publish(*collision_points_);
       }
-      return cmd_vel;
+      return true;
     }
 
     // Forward simulate command
@@ -551,7 +571,7 @@ bool GracefulControllerROS::simulate(const geometry_msgs::msg::PoseStamped& targ
       // Publish visualization if desired
       if (collision_points_)
       {
-        collision_point_pub_->publish(*collision_points_);
+        collision_points_pub_->publish(*collision_points_);
       }
       // Reason will be printed in function
       break;
@@ -560,7 +580,7 @@ bool GracefulControllerROS::simulate(const geometry_msgs::msg::PoseStamped& targ
     RCLCPP_ERROR(logger_, "No pose in path was reachable");
     cmd_vel.twist.linear.x = 0.0;
     cmd_vel.twist.angular.z = 0.0;
-    return cmd_vel;
+    return false;
   }
   
   // Really shouldn't hit this
@@ -580,11 +600,11 @@ void GracefulControllerROS::setPlan(const nav_msgs::msg::Path & path)
   nav_msgs::msg::Path oriented_plan;
   if (compute_orientations_)
   {
-    oriented_plan = addOrientations(plan);
+    oriented_plan = addOrientations(path);
   }
   else
   {
-    oriented_plan = plan;
+    oriented_plan = path;
   }
 
   // Filter noisy orientations (if desired)
@@ -601,6 +621,7 @@ void GracefulControllerROS::setPlan(const nav_msgs::msg::Path & path)
   // Store the plan for computeVelocityCommands
   global_plan_ = filtered_plan;
   has_new_path_ = true;
+  goal_tolerance_met_ = false;
   RCLCPP_INFO(logger_, "Recieved a new path with %lu points", filtered_plan.poses.size());
 }
 
@@ -643,12 +664,13 @@ double GracefulControllerROS::rotateTowards(
   return yaw;
 }
 
-void GracefulControllerROS::velocityCallback(const std_msgs::msg::Float32::ConstSharedPtr max_vel_x)
+void GracefulControllerROS::setSpeedLimit(const double& speed_limit, const bool& percentage)
 {
   // Lock the mutex
   std::lock_guard<std::mutex> lock(config_mutex_);
 
-  max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
+  // TODO: handle percentage
+  max_vel_x_ = std::max(static_cast<double>(speed_limit), min_vel_x_);
 }
 
 }  // namespace graceful_controller

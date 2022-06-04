@@ -40,7 +40,7 @@
 #define GRACEFUL_CONTROLLER_ROS_ORIENTATION_TOOLS_HPP
 
 #include <vector>
-#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/path.hpp>
 
 namespace graceful_controller
 {
@@ -50,8 +50,7 @@ namespace graceful_controller
  * @param path The path to have orientations added.
  * @returns The oriented path.
  */
-std::vector<geometry_msgs::msg::PoseStamped>
-addOrientations(const std::vector<geometry_msgs::msg::PoseStamped>& path);
+nav_msgs::msg::Path addOrientations(const nav_msgs::msg::Path& path);
 
 /**
  * @brief Filter a path for orientation noise.
@@ -60,10 +59,9 @@ addOrientations(const std::vector<geometry_msgs::msg::PoseStamped>& path);
  * @param gap_tolerance Maximum distance between poses in the filtered path.
  * @returns The filtered path.
  */
-std::vector<geometry_msgs::msg::PoseStamped>
-applyOrientationFilter(const std::vector<geometry_msgs::msg::PoseStamped>& path,
-                       double yaw_tolerance,
-                       double gap_tolerance);
+nav_msgs::msg::Path applyOrientationFilter(const nav_msgs::msg::Path& path,
+                                           double yaw_tolerance,
+                                           double gap_tolerance);
 
 }  // namespace graceful_controller
 

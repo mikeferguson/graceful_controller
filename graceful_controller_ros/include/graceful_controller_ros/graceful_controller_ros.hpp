@@ -66,37 +66,44 @@ public:
    * @param tf A pointer to a transform buffer
    * @param costmap_ros The cost map to use for assigning costs to local plans
    */
-  virtual void configure(const rclcpp_lifecycle::LifecycleNode::SharedPtr & node,
-                         std::string name, const std::shared_ptr<tf2_ros::Buffer> & tf,
-                         const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> & costmap_ros);
-
-  virtual void activate();
-  virtual void deactivate();
+  virtual void configure(
+    const rclcpp_lifecycle::LifecycleNode::WeakPtr& node,
+    std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros);
+  /**
+   * @brief Method to cleanup resources.
+   */
   virtual void cleanup();
+
+  /**
+   * @brief Method to active planner and any threads involved in execution.
+   */
+  virtual void activate();
+
+  /**
+   * @brief Method to deactive planner and any threads involved in execution.
+   */
+  virtual void deactivate();
 
   /**
    * @brief Controller computeVelocityCommands - calculates the best command given the current pose and velocity
    *
    * It is presumed that the global plan is already set.
-   *
-   * @param robot_pose Current robot pose
+   * @param pose Current robot pose
    * @param velocity Current robot velocity
+   * @param goal_checker Pointer to the current goal checker the task is utilizing
    * @return The best command for the robot to drive
    */
-  virtual geometry_msgs::msg::TwistStamped computeVelocityCommands(geometry_msgs::msg::PoseStamped& robot_pose,
-                                                                   geometry_msgs::msg::Twist& cmd_vel);
-
-  /**
-   * @brief Check if the goal pose has been achieved by the local planner
-   * @return True if achieved, false otherwise
-   */
-  virtual bool isGoalReached();
+  virtual geometry_msgs::msg::TwistStamped computeVelocityCommands(
+    const geometry_msgs::msg::PoseStamped& robot_pose,
+    const geometry_msgs::msg::Twist& cmd_vel,
+    nav2_core::GoalChecker * goal_checker);
 
   /**
    * @brief Set the plan that the local planner is following
    * @param plan The plan to pass to the local planner
    */
-  void setPlan(const nav_msgs::msg::Path & path) override;
+  virtual void setPlan(const nav_msgs::msg::Path & path);
 
   /**
    * @brief Rotate the robot towards a goal.
@@ -108,33 +115,44 @@ public:
                        const geometry_msgs::msg::Twist& velocity,
                        geometry_msgs::msg::TwistStamped& cmd_vel);
 
-private:
-  void velocityCallback(const std_msgs::msg::Float32::ConstSharedPtr& max_vel_x);
+  /**
+   * @brief Limits the maximum linear speed of the robot.
+   * @param speed_limit expressed in absolute value (in m/s)
+   * or in percentage from maximum robot speed.
+   * @param percentage Setting speed limit in percentage if true
+   * or in absolute values in false case.
+   */
+  virtual void setSpeedLimit(const double& speed_limit, const bool& percentage);
 
+private:
   /**
    * @brief Simulate a path.
    * @param target_pose Pose to simulate towards.
    * @param cmd_vel The returned command to execute.
    * @returns True if the path is valid.
    */
-  bool simulate(const geometry_msgs::msg::PoseStamped& target_pose, geometry_msgs::TwistStamped& cmd_vel);
+  bool simulate(
+    const geometry_msgs::msg::PoseStamped& target_pose,
+    const geometry_msgs::msg::Twist& velocity,
+    geometry_msgs::msg::TwistStamped& cmd_vel);
 
-  rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
+  rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_{rclcpp::get_logger("GracefulController")};
   std::string name_;
 
-  std::shared_ptr<LifecyclePublisher<nav_msgs::msg::Path>> global_plan_pub_;
-  std::shared_ptr<LifecyclePublisher<nav_msgs::msg::Path>> local_plan_pub_;
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr collision_points_pub_;
-  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr max_vel_sub_;
-
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> global_plan_pub_;
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> local_plan_pub_;
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseStamped>> target_pose_pub_;
+  std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>> collision_points_pub_;
+  
   bool initialized_;
   GracefulControllerPtr controller_;
 
   std::shared_ptr<tf2_ros::Buffer> buffer_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   geometry_msgs::msg::TransformStamped robot_to_costmap_transform_;
+  nav_msgs::msg::Path global_plan_;
 
   // Parameters
   std::mutex config_mutex_;
@@ -147,8 +165,6 @@ private:
   double scaling_vel_x_;
   double scaling_factor_;
   double scaling_step_;
-  double xy_goal_tolerance_;
-  double yaw_goal_tolerance_;
   double min_lookahead_;
   double max_lookahead_;
   double resolution_;
@@ -168,10 +184,9 @@ private:
   bool has_new_path_;
 
   // Optional visualization of colliding and non-colliding points checked
-  std::shared_ptr<LifecyclePublisher<visualization_msgs::msg::MarkerArray>> collision_point_pub_;
   visualization_msgs::msg::MarkerArray* collision_points_;
 
-  nav_msgs::msg::PoseStamped robot_pose_;
+  geometry_msgs::msg::PoseStamped robot_pose_;
 };
 
 }  // namespace graceful_controller
