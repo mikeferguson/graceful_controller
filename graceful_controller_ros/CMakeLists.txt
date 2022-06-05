@@ -38,9 +38,6 @@ add_library(graceful_controller_ros SHARED
   src/orientation_tools.cpp
   src/visualization.cpp
 )
-target_link_libraries(graceful_controller_ros
-  ${catkin_LIBRARIES}
-)
 ament_target_dependencies(graceful_controller_ros
   angles
   geometry_msgs
