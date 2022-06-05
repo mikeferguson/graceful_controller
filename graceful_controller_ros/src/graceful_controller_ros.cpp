@@ -43,6 +43,7 @@
 #include <nav_2d_utils/parameters.hpp>
 #include <nav2_costmap_2d/footprint.hpp>
 #include <nav2_util/line_iterator.hpp>
+#include <rclcpp/logging.hpp>
 #include "graceful_controller_ros/graceful_controller_ros.hpp"
 
 using rclcpp_lifecycle::LifecyclePublisher;
@@ -50,6 +51,8 @@ using nav2_util::declare_parameter_if_not_declared;
 
 namespace graceful_controller
 {
+static const rclcpp::Logger LOGGER = rclcpp::get_logger("graceful_controller");
+
 double sign(double x)
 {
   return x < 0.0 ? -1.0 : 1.0;
@@ -100,7 +103,7 @@ bool isColliding(double x, double y, double theta,
   {
     if (costmap->getCostmap()->getCost(mx, my) >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
     {
-      //ROS_DEBUG("Collision along path at (%f,%f)", x, y);
+      RCLCPP_DEBUG(LOGGER, "Collision along path at (%f,%f)", x, y);
       addPointMarker(x, y, true, viz);
       return true;
     }
@@ -114,7 +117,7 @@ bool isColliding(double x, double y, double theta,
     unsigned x0, y0, x1, y1;
     if (!costmap->getCostmap()->worldToMap(footprint[i].x, footprint[i].y, x0, y0))
     {
-      //ROS_DEBUG("Footprint point %lu is off costmap", i);
+      RCLCPP_DEBUG(LOGGER, "Footprint point %lu is off costmap", i);
       addPointMarker(footprint[i].x, footprint[i].y, true, viz);
       return true;
     }
@@ -123,7 +126,7 @@ bool isColliding(double x, double y, double theta,
     size_t next = (i + 1) % footprint.size();
     if (!costmap->getCostmap()->worldToMap(footprint[next].x, footprint[next].y, x1, y1))
     {
-      //ROS_DEBUG("Footprint point %lu is off costmap", next);
+      RCLCPP_DEBUG(LOGGER, "Footprint point %lu is off costmap", next);
       addPointMarker(footprint[next].x, footprint[next].y, true, viz);
       return true;
     }
@@ -133,7 +136,7 @@ bool isColliding(double x, double y, double theta,
     {
       if (costmap->getCostmap()->getCost(line.getX(), line.getY()) >= nav2_costmap_2d::LETHAL_OBSTACLE)
       {
-        //ROS_DEBUG("Collision along path at (%f,%f)", x, y);
+        RCLCPP_DEBUG(LOGGER, "Collision along path at (%f,%f)", x, y);
         return true;
       }
     }
@@ -162,7 +165,7 @@ void GracefulControllerROS::configure(
 {
   if (initialized_)
   {
-    RCLCPP_ERROR(logger_, "This planner has already been initialized, doing nothing.");
+    RCLCPP_ERROR(LOGGER, "This planner has already been initialized, doing nothing.");
     return;
   }
 
@@ -179,7 +182,6 @@ void GracefulControllerROS::configure(
   }
 
   clock_ = node->get_clock();
-  logger_ = node->get_logger();
 
   // Setup parameters
   declare_parameter_if_not_declared(node, name_ + ".max_vel_x", rclcpp::ParameterValue(0.5));
@@ -298,7 +300,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
 
   if (!initialized_)
   {
-    RCLCPP_ERROR(logger_, "Controller is not initialized, call configure() before using this planner");
+    RCLCPP_ERROR(LOGGER, "Controller is not initialized, call configure() before using this planner");
     return cmd_vel;
   }
 
@@ -315,7 +317,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   }
   catch (tf2::TransformException& ex)
   {
-    RCLCPP_ERROR(logger_, "Could not transform to %s", costmap_ros_->getBaseFrameID().c_str());
+    RCLCPP_ERROR(LOGGER, "Could not transform to %s", costmap_ros_->getBaseFrameID().c_str());
     return cmd_vel;
   }
 
@@ -327,7 +329,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   }
   catch (tf2::TransformException& ex)
   {
-    RCLCPP_ERROR(logger_, "Could not transform to %s", costmap_ros_->getGlobalFrameID().c_str());
+    RCLCPP_ERROR(LOGGER, "Could not transform to %s", costmap_ros_->getGlobalFrameID().c_str());
     return cmd_vel;
   }
 
@@ -364,7 +366,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
       double yaw = yaw_start + (step * (yaw_start - yaw_end));
       if (isColliding(robot_pose_.pose.position.x, robot_pose_.pose.position.y, yaw, costmap_ros_, collision_points_))
       {
-        RCLCPP_ERROR(logger_, "Unable to rotate in place due to collision");
+        RCLCPP_ERROR(LOGGER, "Unable to rotate in place due to collision");
         if (collision_points_)
         {
           collision_points_pub_->publish(*collision_points_);
@@ -435,7 +437,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     while (sim_velocity >= scaling_vel_x_);
   }
 
-  RCLCPP_ERROR(logger_, "No pose in path was reachable");
+  RCLCPP_ERROR(LOGGER, "No pose in path was reachable");
   return cmd_vel;
 }
  
@@ -487,7 +489,7 @@ bool GracefulControllerROS::simulate(
         if (simulated_path.poses.empty())
         {
           // Current robot pose satisifies initial rotate tolerance
-          RCLCPP_INFO(logger_, "Done rotating towards path");
+          RCLCPP_INFO(LOGGER, "Done rotating towards path");
           has_new_path_ = false;
         }
         sim_initial_rotation_ = false;
@@ -501,7 +503,7 @@ bool GracefulControllerROS::simulate(
       if (!controller_->approach(error.pose.position.x, error.pose.position.y, error_angle,
                                  vel_x, vel_th))
       {
-        RCLCPP_ERROR(logger_, "Unable to compute approach");
+        RCLCPP_ERROR(LOGGER, "Unable to compute approach");
         return false;
       }
     }
@@ -577,14 +579,14 @@ bool GracefulControllerROS::simulate(
       break;
     }
 
-    RCLCPP_ERROR(logger_, "No pose in path was reachable");
+    RCLCPP_ERROR(LOGGER, "No pose in path was reachable");
     cmd_vel.twist.linear.x = 0.0;
     cmd_vel.twist.angular.z = 0.0;
     return false;
   }
   
   // Really shouldn't hit this
-  RCLCPP_ERROR(logger_, "Did not reach target_pose, but stopped simulating?");
+  RCLCPP_ERROR(LOGGER, "Did not reach target_pose, but stopped simulating?");
   return false;
 }
 
@@ -592,7 +594,7 @@ void GracefulControllerROS::setPlan(const nav_msgs::msg::Path & path)
 {
   if (!initialized_)
   {
-    RCLCPP_ERROR(logger_, "Controller is not initialized, call initialize() before using this controller");
+    RCLCPP_ERROR(LOGGER, "Controller is not initialized, call initialize() before using this controller");
     return;
   }
 
@@ -622,7 +624,7 @@ void GracefulControllerROS::setPlan(const nav_msgs::msg::Path & path)
   global_plan_ = filtered_plan;
   has_new_path_ = true;
   goal_tolerance_met_ = false;
-  RCLCPP_INFO(logger_, "Recieved a new path with %lu points", filtered_plan.poses.size());
+  RCLCPP_INFO(LOGGER, "Recieved a new path with %lu points", filtered_plan.poses.size());
 }
 
 double GracefulControllerROS::rotateTowards(
@@ -644,7 +646,7 @@ double GracefulControllerROS::rotateTowards(
     yaw = tf2::getYaw(pose.pose.orientation);
   }
 
-  RCLCPP_DEBUG(logger_, "Rotating towards goal, error = %f", yaw);
+  RCLCPP_DEBUG(LOGGER, "Rotating towards goal, error = %f", yaw);
 
   // Determine max velocity based on current speed
   double max_vel_th = max_vel_theta_;

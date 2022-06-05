@@ -37,11 +37,14 @@
  *********************************************************************/
 
 #include <angles/angles.h>
+#include <rclcpp/logging.hpp>
 #include <tf2/utils.h>  // getYaw
 #include "graceful_controller_ros/orientation_tools.hpp"
 
 namespace graceful_controller
 {
+static const rclcpp::Logger LOGGER = rclcpp::get_logger("graceful_controller");
+
 // Helper function to get yaw if "from" were to point towards "to"
 double getRelativeYaw(const geometry_msgs::msg::PoseStamped& from, const geometry_msgs::msg::PoseStamped& to)
 {
@@ -121,7 +124,7 @@ nav_msgs::msg::Path applyOrientationFilter(const nav_msgs::msg::Path& path,
     else if (std::hypot(path.poses[i].pose.position.x - filtered_path.poses.back().pose.position.x,
                         path.poses[i].pose.position.y - filtered_path.poses.back().pose.position.y) >= gap_tolerance)
     {
-      //ROS_DEBUG_NAMED("orientation_filter", "Including pose %lu to meet max_separation_dist", i);
+      RCLCPP_DEBUG(LOGGER, "Including pose %lu to meet max_separation_dist", i);
       // Update previous heading in case we dropped some poses
       setYaw(filtered_path.poses.back(), yaw_previous);
       // Add this pose to the filtered plan
@@ -130,7 +133,7 @@ nav_msgs::msg::Path applyOrientationFilter(const nav_msgs::msg::Path& path,
     else
     {
       // Sorry pose, the plan is better without you :(
-      //ROS_DEBUG_NAMED("orientation_filter", "Filtering pose %lu", i);
+      RCLCPP_DEBUG(LOGGER, "Filtering pose %lu", i);
     }
   }
 
@@ -140,7 +143,7 @@ nav_msgs::msg::Path applyOrientationFilter(const nav_msgs::msg::Path& path,
   // Always add the last pose, since this is our goal
   filtered_path.poses.push_back(path.poses.back());
 
-  //ROS_DEBUG_NAMED("orientation_filter", "Filtered %lu points from plan", path.size() - filtered_path.size());
+  RCLCPP_DEBUG(LOGGER, "Filtered %lu points from plan", path.poses.size() - filtered_path.poses.size());
   return filtered_path;
 }
 
