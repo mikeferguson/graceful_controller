@@ -369,8 +369,9 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
       if (isColliding(robot_pose_.pose.position.x, robot_pose_.pose.position.y, yaw, costmap_ros_, collision_points_))
       {
         RCLCPP_ERROR(LOGGER, "Unable to rotate in place due to collision");
-        if (collision_points_)
+        if (collision_points_ && !collision_points_->markers.empty())
         {
+          collision_points_->markers[0].header.stamp = clock_->now();
           collision_points_pub_->publish(*collision_points_);
         }
         // Reset to zero velocity
@@ -394,11 +395,11 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     //  * But no further than the max_lookahed_ distance
     //  * Be feasible to reach in a collision free manner
     geometry_msgs::msg::PoseStamped target_pose;
-  
+
     // Transform potential target pose into base_link
     tf2::doTransform(global_plan_.poses[i], target_pose, plan_to_robot);
 
-    // Continue if this is too far away
+    // Continue if target_pose is too far away from robot
     double dist_to_target = std::hypot(target_pose.pose.position.x, target_pose.pose.position.y);
     if (dist_to_target > max_lookahead_)
     {
@@ -441,6 +442,8 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   }
 
   RCLCPP_ERROR(LOGGER, "No pose in path was reachable");
+  cmd_vel.twist.linear.x = 0.0;
+  cmd_vel.twist.angular.z = 0.0;
   return cmd_vel;
 }
  
@@ -451,7 +454,7 @@ bool GracefulControllerROS::simulate(
 {
   // Simulated path (for debugging/visualization)
   nav_msgs::msg::Path simulated_path;
-  // Should we simulate rotaiton initially
+  // Should we simulate rotation initially
   bool sim_initial_rotation_ = has_new_path_ && initial_rotate_tolerance_ > 0.0;
   // Clear any previous visualizations
   if (collision_points_)
@@ -522,8 +525,10 @@ bool GracefulControllerROS::simulate(
       // We've simulated to the desired pose, can return this result
       local_plan_pub_->publish(simulated_path);
       target_pose_pub_->publish(target_pose);
-      if (collision_points_)
+      // Publish visualization if desired
+      if (collision_points_ && !collision_points_->markers.empty())
       {
+        collision_points_->markers[0].header.stamp = clock_->now();
         collision_points_pub_->publish(*collision_points_);
       }
       return true;
@@ -574,19 +579,18 @@ bool GracefulControllerROS::simulate(
                     costmap_ros_, collision_points_, footprint_scaling))
     {
       // Publish visualization if desired
-      if (collision_points_)
+      if (collision_points_ && !collision_points_->markers.empty())
       {
+        collision_points_->markers[0].header.stamp = clock_->now();
         collision_points_pub_->publish(*collision_points_);
       }
       // Reason will be printed in function
-      break;
+      return false;
     }
   }
-  
+
   // Really shouldn't hit this
   RCLCPP_ERROR(LOGGER, "Did not reach target_pose, but stopped simulating?");
-  cmd_vel.twist.linear.x = 0.0;
-  cmd_vel.twist.angular.z = 0.0;
   return false;
 }
 
@@ -678,5 +682,5 @@ void GracefulControllerROS::setSpeedLimit(const double& speed_limit, const bool&
 
 }  // namespace graceful_controller
 
-#include "pluginlib/class_list_macros.hpp"
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(graceful_controller::GracefulControllerROS, nav2_core::Controller)

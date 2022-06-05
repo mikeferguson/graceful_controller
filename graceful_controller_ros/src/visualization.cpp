@@ -49,7 +49,6 @@ void addPointMarker(double x, double y, bool colliding, visualization_msgs::msg:
     msg->markers.resize(1);
     msg->markers[0].type = msg->markers[0].POINTS;
     msg->markers[0].header.frame_id = "odom";
-    //msg->markers[0].header.stamp = ros::Time::now();
     msg->markers[0].pose.orientation.w = 1.0;
     msg->markers[0].scale.x = 0.02;
     msg->markers[0].scale.y = 0.02;

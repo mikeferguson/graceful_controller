@@ -62,6 +62,7 @@ public:
 
   /**
    * @brief Constructs the local planner
+   * @param node WeakPtr to the Lifecycle node
    * @param name The name to give this instance of the local planner
    * @param tf A pointer to a transform buffer
    * @param costmap_ros The cost map to use for assigning costs to local plans
@@ -70,6 +71,7 @@ public:
     const rclcpp_lifecycle::LifecycleNode::WeakPtr& node,
     std::string name, std::shared_ptr<tf2_ros::Buffer> tf,
     std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros);
+
   /**
    * @brief Method to cleanup resources.
    */
@@ -86,7 +88,7 @@ public:
   virtual void deactivate();
 
   /**
-   * @brief Controller computeVelocityCommands - calculates the best command given the current pose and velocity
+   * @brief Calculates the best command given the current pose and velocity
    *
    * It is presumed that the global plan is already set.
    * @param pose Current robot pose
@@ -108,7 +110,8 @@ public:
   /**
    * @brief Rotate the robot towards a goal.
    * @param pose The pose should always be in base frame!
-   * @param cmd_vel The returned command velocity
+   * @param velocity Current robot velocity.
+   * @param cmd_vel The returned command velocity.
    * @returns The computed angular error.
    */
   double rotateTowards(const geometry_msgs::msg::PoseStamped& pose,
@@ -128,6 +131,7 @@ private:
   /**
    * @brief Simulate a path.
    * @param target_pose Pose to simulate towards.
+   * @param velocity Current robot velocity.
    * @param cmd_vel The returned command to execute.
    * @returns True if the path is valid.
    */
