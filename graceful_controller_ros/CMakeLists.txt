@@ -65,6 +65,34 @@ if(BUILD_TESTING)
   target_link_libraries(orientation_filter_tests
     graceful_controller_ros
   )
+
+  ament_add_gtest_executable(graceful_controller_tests
+    test/graceful_controller_tests.cpp
+  )
+  ament_target_dependencies(graceful_controller_tests
+    angles
+    geometry_msgs
+    graceful_controller
+    nav_2d_utils
+    nav_msgs
+    nav2_core
+    nav2_costmap_2d
+    pluginlib
+    rclcpp
+    std_msgs
+    tf2_geometry_msgs
+    tf2_ros
+    visualization_msgs
+  )
+
+  ament_add_test(test_graceful_controller
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/costmap_tests_launch.py"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    ENV
+      TEST_LAUNCH_DIR=${TEST_LAUNCH_DIR}
+      TEST_EXECUTABLE=$<TARGET_FILE:graceful_controller_tests>
+  )
 endif()
 
 install(TARGETS graceful_controller_ros
