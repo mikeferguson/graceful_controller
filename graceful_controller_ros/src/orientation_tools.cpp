@@ -2,7 +2,7 @@
  *
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2021, Michael Ferguson
+ *  Copyright (c) 2021-2022, Michael Ferguson
  *  Copyright (c) 2009, Willow Garage, Inc.
  *  All rights reserved.
  *
@@ -36,110 +36,114 @@
  * Author: Michael Ferguson
  *********************************************************************/
 
-#include <ros/ros.h>
 #include <angles/angles.h>
+#include <rclcpp/logging.hpp>
 #include <tf2/utils.h>  // getYaw
 #include "graceful_controller_ros/orientation_tools.hpp"
 
 namespace graceful_controller
 {
+static const rclcpp::Logger LOGGER = rclcpp::get_logger("graceful_controller");
+
 // Helper function to get yaw if "from" were to point towards "to"
-double getRelativeYaw(const geometry_msgs::PoseStamped& from, const geometry_msgs::PoseStamped& to)
+double getRelativeYaw(const geometry_msgs::msg::PoseStamped& from, const geometry_msgs::msg::PoseStamped& to)
 {
   double dx = to.pose.position.x - from.pose.position.x;
   double dy = to.pose.position.y - from.pose.position.y;
   return std::atan2(dy, dx);
 }
 
-void setYaw(geometry_msgs::PoseStamped& pose, double yaw)
+void setYaw(geometry_msgs::msg::PoseStamped& pose, double yaw)
 {
   pose.pose.orientation.z = sin(yaw / 2.0);
   pose.pose.orientation.w = cos(yaw / 2.0);
 }
 
-std::vector<geometry_msgs::PoseStamped> addOrientations(const std::vector<geometry_msgs::PoseStamped>& path)
+nav_msgs::msg::Path addOrientations(const nav_msgs::msg::Path& path)
 {
-  std::vector<geometry_msgs::PoseStamped> oriented_path;
-  oriented_path.resize(path.size());
-  if (path.empty())
+  nav_msgs::msg::Path oriented_path;
+  oriented_path.header = path.header;
+  oriented_path.poses.resize(path.poses.size());
+  if (path.poses.empty())
   {
     // This really shouldn't happen
     return oriented_path;
   }
 
   // The last pose will already be oriented since it is our goal
-  oriented_path.back() = path.back();
+  oriented_path.poses.back() = path.poses.back();
 
   // For each pose, point at the next one
-  for (size_t i = 0; i < oriented_path.size() - 1; ++i)
+  for (size_t i = 0; i < oriented_path.poses.size() - 1; ++i)
   {
-    oriented_path[i] = path[i];
-    double yaw = getRelativeYaw(path[i], path[i + 1]);
-    setYaw(oriented_path[i], yaw);
+    oriented_path.poses[i] = path.poses[i];
+    double yaw = getRelativeYaw(path.poses[i], path.poses[i + 1]);
+    setYaw(oriented_path.poses[i], yaw);
   }
 
   return oriented_path;
 }
 
-std::vector<geometry_msgs::PoseStamped> applyOrientationFilter(const std::vector<geometry_msgs::PoseStamped>& path,
-                                                               double yaw_tolerance, double gap_tolerance)
+nav_msgs::msg::Path applyOrientationFilter(const nav_msgs::msg::Path& path,
+                                           double yaw_tolerance, double gap_tolerance)
 {
-  std::vector<geometry_msgs::PoseStamped> filtered_path;
-  filtered_path.reserve(path.size());
-  if (path.empty())
+  nav_msgs::msg::Path filtered_path;
+  filtered_path.header = path.header;
+  filtered_path.poses.reserve(path.poses.size());
+  if (path.poses.empty())
   {
     // This really shouldn't happen
     return filtered_path;
   }
 
   // Always keep the first pose
-  filtered_path.push_back(path.front());
+  filtered_path.poses.push_back(path.poses.front());
 
   // Possibly filter some intermediate poses
-  for (size_t i = 1; i < path.size() - 1; ++i)
+  for (size_t i = 1; i < path.poses.size() - 1; ++i)
   {
     // Get the yaw angle if the previous pose were to be pointing at this pose
     // We need to recompute because we might have dropped poses
-    double yaw_previous = getRelativeYaw(filtered_path.back(), path[i]);
+    double yaw_previous = getRelativeYaw(filtered_path.poses.back(), path.poses[i]);
 
     // Get the yaw angle of this pose pointing at next pose
-    double yaw_this = tf2::getYaw(path[i].pose.orientation);
+    double yaw_this = tf2::getYaw(path.poses[i].pose.orientation);
 
     // Get the yaw angle if previous pose were to be pointing at next pose, filtering this pose
-    double yaw_without = getRelativeYaw(filtered_path.back(), path[i + 1]);
+    double yaw_without = getRelativeYaw(filtered_path.poses.back(), path.poses[i + 1]);
 
     // Determine if this pose is far off a direct line between previous and next pose
     if (fabs(angles::shortest_angular_distance(yaw_previous, yaw_without)) < yaw_tolerance &&
         fabs(angles::shortest_angular_distance(yaw_this, yaw_without)) < yaw_tolerance)
     {
       // Update previous heading in case we dropped some poses
-      setYaw(filtered_path.back(), yaw_previous);
+      setYaw(filtered_path.poses.back(), yaw_previous);
       // Add this pose to the filtered plan
-      filtered_path.push_back(path[i]);
+      filtered_path.poses.push_back(path.poses[i]);
     }
-    else if (std::hypot(path[i].pose.position.x - filtered_path.back().pose.position.x,
-                        path[i].pose.position.y - filtered_path.back().pose.position.y) >= gap_tolerance)
+    else if (std::hypot(path.poses[i].pose.position.x - filtered_path.poses.back().pose.position.x,
+                        path.poses[i].pose.position.y - filtered_path.poses.back().pose.position.y) >= gap_tolerance)
     {
-      ROS_DEBUG_NAMED("orientation_filter", "Including pose %lu to meet max_separation_dist", i);
+      RCLCPP_DEBUG(LOGGER, "Including pose %lu to meet max_separation_dist", i);
       // Update previous heading in case we dropped some poses
-      setYaw(filtered_path.back(), yaw_previous);
+      setYaw(filtered_path.poses.back(), yaw_previous);
       // Add this pose to the filtered plan
-      filtered_path.push_back(path[i]);
+      filtered_path.poses.push_back(path.poses[i]);
     }
     else
     {
       // Sorry pose, the plan is better without you :(
-      ROS_DEBUG_NAMED("orientation_filter", "Filtering pose %lu", i);
+      RCLCPP_DEBUG(LOGGER, "Filtering pose %lu", i);
     }
   }
 
   // Reset heading of what will be penultimate pose, in case we dropped some poses
-  setYaw(filtered_path.back(), getRelativeYaw(filtered_path.back(), path.back()));
+  setYaw(filtered_path.poses.back(), getRelativeYaw(filtered_path.poses.back(), path.poses.back()));
 
   // Always add the last pose, since this is our goal
-  filtered_path.push_back(path.back());
+  filtered_path.poses.push_back(path.poses.back());
 
-  ROS_DEBUG_NAMED("orientation_filter", "Filtered %lu points from plan", path.size() - filtered_path.size());
+  RCLCPP_DEBUG(LOGGER, "Filtered %lu points from plan", path.poses.size() - filtered_path.poses.size());
   return filtered_path;
 }
 

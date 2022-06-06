@@ -36,12 +36,12 @@
 #ifndef GRACEFUL_CONTROLLER_ROS_VISUALIZATION_HPP
 #define GRACEFUL_CONTROLLER_ROS_VISUALIZATION_HPP
 
-#include <visualization_msgs/MarkerArray.h>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 /**
  * @brief Add a visualization point to a marker.
  */
 void addPointMarker(double x, double y, bool colliding,
-                    visualization_msgs::MarkerArray* msg);
+                    visualization_msgs::msg::MarkerArray* msg);
 
 #endif  // GRACEFUL_CONTROLLER_ROS_VISUALIZATION_HPP

@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         env:
-          - {ROS_DISTRO: humble, ROS_REPO: main}
+          - {ROS_DISTRO: humble, ROS_REPO: main, UPSTREAM_WORKSPACE: 'github:ros-planning/navigation2#main -navigation2/nav2_system_tests -navigation2/nav2_bringup'}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
