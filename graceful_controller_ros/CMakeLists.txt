@@ -56,26 +56,15 @@ ament_target_dependencies(graceful_controller_ros
 )
 
 if(CATKIN_ENABLE_TESTING)
-  #find_package(ament_cmake_gtest REQUIRED)
-  #find_package(rostest)
+  find_package(ament_cmake_gtest REQUIRED)
 
-  #add_executable(graceful_controller_tests
-  #  test/graceful_controller_tests.cpp
-  #)
-  #target_link_libraries(graceful_controller_tests
-  #  ${catkin_LIBRARIES}
-  #  ${GTEST_LIBRARIES}
-  #)
-  #add_dependencies(tests graceful_controller_tests)
-  #add_rostest(test/graceful_controller.test)
-
-  #catkin_add_gtest(orientation_filter_tests
-  #  src/orientation_tools.cpp
-  #  test/orientation_tools_tests.cpp
-  #)
-  #target_link_libraries(orientation_filter_tests
-  #  ${catkin_LIBRARIES}
-  #)
+  ament_add_gtest(orientation_filter_tests
+    src/orientation_tools.cpp
+    test/orientation_tools_tests.cpp
+  )
+  target_link_libraries(orientation_filter_tests
+    graceful_controller_ros
+  )
 endif()
 
 install(TARGETS graceful_controller_ros
