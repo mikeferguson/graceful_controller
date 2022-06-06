@@ -87,10 +87,9 @@ if(BUILD_TESTING)
 
   ament_add_test(test_graceful_controller
     GENERATE_RESULT_FOR_RETURN_CODE_ZERO
-    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/costmap_tests_launch.py"
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/test/graceful_controller_tests_launch.py"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     ENV
-      TEST_LAUNCH_DIR=${TEST_LAUNCH_DIR}
       TEST_EXECUTABLE=$<TARGET_FILE:graceful_controller_tests>
   )
 endif()
