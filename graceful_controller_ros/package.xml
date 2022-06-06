@@ -14,7 +14,6 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>angles</depend>
-  <depend>base_local_planner</depend>
   <depend>geometry_msgs</depend>
   <depend>graceful_controller</depend>
   <depend>nav_2d_utils</depend>
