@@ -55,7 +55,7 @@ ament_target_dependencies(graceful_controller_ros
   visualization_msgs
 )
 
-if(CATKIN_ENABLE_TESTING)
+if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
 
   ament_add_gtest(orientation_filter_tests
