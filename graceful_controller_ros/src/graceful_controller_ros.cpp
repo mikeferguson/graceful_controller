@@ -369,7 +369,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     {
       double step = static_cast<double>(i) / static_cast<double>(num_steps);
       double yaw = step * yaw_delta;
-      if (isColliding(robot_pose_.pose.position.x, robot_pose_.pose.position.y, yaw, costmap_ros_, collision_points_))
+      if (isColliding(robot_pose.pose.position.x, robot_pose.pose.position.y, yaw, costmap_ros_, collision_points_))
       {
         RCLCPP_ERROR(LOGGER, "Unable to rotate in place due to collision");
         if (collision_points_ && !collision_points_->markers.empty())
