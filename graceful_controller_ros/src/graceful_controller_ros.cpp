@@ -267,6 +267,7 @@ void GracefulControllerROS::cleanup()
 {
   global_plan_pub_.reset();
   local_plan_pub_.reset();
+  target_pose_pub_.reset();
   collision_points_pub_.reset();
 }
 
@@ -274,6 +275,7 @@ void GracefulControllerROS::activate()
 {
   global_plan_pub_->on_activate();
   local_plan_pub_->on_activate();
+  target_pose_pub_->on_activate();
   if (collision_points_)
   {
     collision_points_pub_->on_activate();
@@ -285,6 +287,7 @@ void GracefulControllerROS::deactivate()
 {
   global_plan_pub_->on_deactivate();
   local_plan_pub_->on_deactivate();
+  target_pose_pub_->on_deactivate();
   if (collision_points_)
   {
     collision_points_pub_->on_deactivate();
