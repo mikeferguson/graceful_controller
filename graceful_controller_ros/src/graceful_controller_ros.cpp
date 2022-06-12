@@ -300,14 +300,16 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   nav2_core::GoalChecker * goal_checker)
 {
   geometry_msgs::msg::TwistStamped cmd_vel;
-  cmd_vel.header.frame_id = robot_pose.header.frame_id;
-  cmd_vel.header.stamp = clock_->now();
 
   if (!initialized_)
   {
     RCLCPP_ERROR(LOGGER, "Controller is not initialized, call configure() before using this planner");
     return cmd_vel;
   }
+
+  // Do this here to avoid segfault if not initialized
+  cmd_vel.header.frame_id = robot_pose.header.frame_id;
+  cmd_vel.header.stamp = clock_->now();
 
   // Lock the mutex
   std::lock_guard<std::mutex> lock(config_mutex_);
