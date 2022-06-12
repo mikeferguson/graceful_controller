@@ -497,6 +497,7 @@ TEST(ControllerTests, test_final_rotate_in_place)
   EXPECT_EQ(command.twist.angular.z, -0.6);
 }
 
+/*
 TEST(ControllerTests, test_collision_check)
 {
   GoalCheckerFixture goal_checker;
@@ -526,13 +527,13 @@ TEST(ControllerTests, test_collision_check)
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 }
+*/
 
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);
   bool success = RUN_ALL_TESTS();
-  RCLCPP_WARN(LOGGER, "ALL DONE");
   rclcpp::shutdown();
   return success;
 }
