@@ -30,6 +30,7 @@ costmap:
       static_map:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
+        map_topic: /map
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         robot_radius: 0.25

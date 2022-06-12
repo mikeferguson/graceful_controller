@@ -100,13 +100,15 @@ public:
     map_qos.transient_local();
     map_qos.reliable();
     map_qos.keep_last(1);
-    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", map_qos);
+    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map_raw", map_qos);
 
     // Need to start publishing odom before we initialize the costmap
     resetMap();
     resetPose();
     setSimVelocity(0.0, 0.0);
     thread_ = new std::thread(std::bind(&ControllerFixture::updateThread, this));
+
+    rclcpp::sleep_for(std::chrono::milliseconds(250));
 
     // Costmap for testing
     costmap_ros_.reset(new nav2_costmap_2d::Costmap2DROS("costmap"));

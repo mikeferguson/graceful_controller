@@ -19,7 +19,14 @@ def main(argv=sys.argv[1:]):
         output='screen',
     )
 
-    ld = LaunchDescription()
+    map_relay = Node(
+        package="topic_tools",
+        executable="relay",
+        parameters=[{"input_topic": "/map_raw",
+                     "output_topic": "/map"}],
+    )
+
+    ld = LaunchDescription([map_relay])
     lts = LaunchTestService()
     lts.add_test_action(ld, test_node)
     ls = LaunchService(argv=argv)
