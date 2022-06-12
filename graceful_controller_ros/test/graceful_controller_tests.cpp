@@ -101,6 +101,7 @@ public:
     // Need to start publishing odom before we initialize the costmap
     resetMap();
     resetPose();
+    setSimVelocity(0.0, 0.0);
     thread_ = new std::thread(std::bind(&ControllerFixture::updateThread, this));
 
     // Costmap for testing
@@ -209,6 +210,9 @@ public:
     odom_.pose.pose.position.y = y;
     odom_.pose.pose.orientation.z = sin(yaw / 2.0);
     odom_.pose.pose.orientation.w = cos(yaw / 2.0);
+
+    // Wait for TF2 to propagate
+    rclcpp::sleep_for(std::chrono::milliseconds(250));
   }
 
   void setMaxVelocity(float velocity)
@@ -220,11 +224,6 @@ public:
   {
     odom_.twist.twist.linear.x = x;
     odom_.twist.twist.angular.z = th;
-  }
-
-  void setSimCommand(geometry_msgs::msg::Twist& command)
-  {
-    command_ = command;
   }
 
   geometry_msgs::msg::PoseStamped getRobotPose()
@@ -247,19 +246,17 @@ protected:
 
     while (rclcpp::ok() && !shutdown_)
     {
-      // Propagate position
-      double yaw = tf2::getYaw(odom_.pose.pose.orientation);
-      odom_.pose.pose.position.x += 0.05 * command_.linear.x * cos(yaw);
-      odom_.pose.pose.position.y += 0.05 * command_.linear.x * sin(yaw);
-      yaw += 0.05 * command_.angular.z;
-      odom_.pose.pose.orientation.z = sin(yaw / 2.0);
-      odom_.pose.pose.orientation.w = cos(yaw / 2.0);
-
       // Fake localization
       geometry_msgs::msg::TransformStamped transform;
       transform.header.stamp = this->now();
       transform.header.frame_id = "map";
       transform.child_frame_id = odom_.header.frame_id;
+      transform.transform.translation.x = 0.0;
+      transform.transform.translation.y = 0.0;
+      transform.transform.translation.z = 0.0;
+      transform.transform.rotation.x = 0.0;
+      transform.transform.rotation.y = 0.0;
+      transform.transform.rotation.z = 0.0;
       transform.transform.rotation.w = 1.0;
       broadcaster_->sendTransform(transform);
 
@@ -268,6 +265,7 @@ protected:
       transform.child_frame_id = odom_.child_frame_id;
       transform.transform.translation.x = odom_.pose.pose.position.x;
       transform.transform.translation.y = odom_.pose.pose.position.y;
+      transform.transform.translation.z = 0.0;
       transform.transform.rotation = odom_.pose.pose.orientation;
       broadcaster_->sendTransform(transform);
 
@@ -285,7 +283,6 @@ protected:
   std::shared_ptr<rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>> map_pub_;
   nav_msgs::msg::OccupancyGrid map_;
   nav_msgs::msg::Odometry odom_;
-  geometry_msgs::msg::Twist command_;
   std::thread* thread_;
   bool shutdown_;
 };
@@ -294,7 +291,7 @@ TEST(ControllerTests, test_basic_plan)
 {
   GoalCheckerFixture goal_checker;
   std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
-  ASSERT_TRUE(fixture->setup(false /* do not intialize */));
+  ASSERT_TRUE(fixture->setup(false /* do not initialize */));
   std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
 
   nav_msgs::msg::Path plan;
@@ -384,7 +381,6 @@ TEST(ControllerTests, test_out_of_range)
   std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
   ASSERT_TRUE(fixture->setup());
   std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
-
 
   nav_msgs::msg::Path plan;
   geometry_msgs::msg::PoseStamped pose;
