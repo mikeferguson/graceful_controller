@@ -73,10 +73,12 @@ bool isColliding(double x, double y, double theta,
   unsigned mx, my;
   if (!costmap->getCostmap()->worldToMap(x, y, mx, my))
   {
-    RCLCPP_DEBUG(LOGGER, "Path is off costmap (%f,%f)", x, y);
+    RCLCPP_WARN(LOGGER, "Path is off costmap (%f,%f)", x, y);
     addPointMarker(x, y, true, viz);
     return true;
   }
+
+  RCLCPP_WARN(LOGGER, "Collision checking %f, %f", x, y);
 
   if (inflation < 1.0)
   {
@@ -103,7 +105,7 @@ bool isColliding(double x, double y, double theta,
   {
     if (costmap->getCostmap()->getCost(mx, my) >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)
     {
-      RCLCPP_DEBUG(LOGGER, "Collision along path at (%f,%f)", x, y);
+      RCLCPP_WARN(LOGGER, "Collision along path at (%f,%f)", x, y);
       addPointMarker(x, y, true, viz);
       return true;
     }
@@ -117,16 +119,17 @@ bool isColliding(double x, double y, double theta,
     unsigned x0, y0, x1, y1;
     if (!costmap->getCostmap()->worldToMap(footprint[i].x, footprint[i].y, x0, y0))
     {
-      RCLCPP_DEBUG(LOGGER, "Footprint point %lu is off costmap", i);
+      RCLCPP_WARN(LOGGER, "Footprint point %lu is off costmap", i);
       addPointMarker(footprint[i].x, footprint[i].y, true, viz);
       return true;
     }
+    RCLCPP_WARN(LOGGER, "Checking %f %f", footprint[i].x, footprint[i].y);
     addPointMarker(footprint[i].x, footprint[i].y, false, viz);
 
     size_t next = (i + 1) % footprint.size();
     if (!costmap->getCostmap()->worldToMap(footprint[next].x, footprint[next].y, x1, y1))
     {
-      RCLCPP_DEBUG(LOGGER, "Footprint point %lu is off costmap", next);
+      RCLCPP_WARN(LOGGER, "Footprint point %lu is off costmap", next);
       addPointMarker(footprint[next].x, footprint[next].y, true, viz);
       return true;
     }
@@ -136,7 +139,7 @@ bool isColliding(double x, double y, double theta,
     {
       if (costmap->getCostmap()->getCost(line.getX(), line.getY()) >= nav2_costmap_2d::LETHAL_OBSTACLE)
       {
-        RCLCPP_DEBUG(LOGGER, "Collision along path at (%f,%f)", x, y);
+        RCLCPP_WARN(LOGGER, "Collision along path at (%f,%f)", x, y);
         return true;
       }
     }
@@ -343,6 +346,9 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     return cmd_vel;
   }
 
+  RCLCPP_WARN(LOGGER, "Transform is %f %f", plan_to_robot.transform.translation.x, plan_to_robot.transform.translation.y);
+  RCLCPP_WARN(LOGGER, "Transform is %f %f", robot_to_costmap_transform_.transform.translation.x, robot_to_costmap_transform_.transform.translation.y);
+
   // Get the overall goal (in the robot frame)
   geometry_msgs::msg::PoseStamped goal_pose = global_plan_.poses.back();
   tf2::doTransform(goal_pose, goal_pose, plan_to_robot);
@@ -404,10 +410,13 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     // Transform potential target pose into base_link
     tf2::doTransform(global_plan_.poses[i], target_pose, plan_to_robot);
 
+    RCLCPP_WARN(LOGGER, "Evaluating %f, %f", target_pose.pose.position.x, target_pose.pose.position.y);
+
     // Continue if target_pose is too far away from robot
     double dist_to_target = std::hypot(target_pose.pose.position.x, target_pose.pose.position.y);
     if (dist_to_target > max_lookahead_)
     {
+      RCLCPP_WARN(LOGGER, "Too far");
       continue;
     }
 
@@ -425,6 +434,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     else if (dist_to_target < min_lookahead_)
     {
       // Make sure target is far enough away to avoid instability
+      RCLCPP_WARN(LOGGER, "Too close");
       break;
     }
 
@@ -438,6 +448,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
       if (simulate(target_pose, velocity, cmd_vel))
       {
         // Have valid command
+        RCLCPP_WARN(LOGGER, "Got command of %f %f", cmd_vel.twist.linear.x, cmd_vel.twist.angular.z);
         return cmd_vel;
       }
       // Reduce velocity and try again for same target_pose
@@ -656,7 +667,7 @@ double GracefulControllerROS::rotateTowards(
     yaw = tf2::getYaw(pose.pose.orientation);
   }
 
-  RCLCPP_DEBUG(LOGGER, "Rotating towards goal, error = %f", yaw);
+  RCLCPP_WARN(LOGGER, "Rotating towards goal, error = %f", yaw);
 
   // Determine max velocity based on current speed
   double max_vel_th = max_vel_theta_;

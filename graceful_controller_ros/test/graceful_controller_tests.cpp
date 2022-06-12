@@ -496,9 +496,6 @@ TEST(ControllerTests, test_final_rotate_in_place)
   EXPECT_EQ(command.twist.angular.z, -0.6);
 }
 
-/*
-THIS TEST IS TEMPORARILY DISABLED DUE TO ISSUES WITH THE MAP SUBSCRIBER
-
 TEST(ControllerTests, test_collision_check)
 {
   GoalCheckerFixture goal_checker;
@@ -528,7 +525,6 @@ TEST(ControllerTests, test_collision_check)
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 }
-*/
 
 int main(int argc, char** argv)
 {
