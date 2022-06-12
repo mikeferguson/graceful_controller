@@ -33,7 +33,7 @@
  *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  *  POSSIBILITY OF SUCH DAMAGE.
  *
- * Author: Eitan Marder-Eppstein, Michael Ferguson
+ * Author: Michael Ferguson
  *********************************************************************/
 
 #include <gtest/gtest.h>
@@ -93,7 +93,7 @@ public:
     broadcaster_.reset(new tf2_ros::TransformBroadcaster(this));
   }
 
-  bool setup(bool intialize = true)
+  bool setup(bool do_init = true)
   {
     // ROS topics to run the test
     map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("map", rclcpp::QoS(1).transient_local());
@@ -118,10 +118,8 @@ public:
       return false;
     }
 
-    if (intialize)
+    if (do_init)
     {
-      this->configure();
-      this->activate();
       initialize();
     }
 
@@ -142,12 +140,16 @@ public:
 
   void initialize()
   {
+    // Configure everything
+    this->configure();
     costmap_ros_->configure();
-    costmap_ros_->activate();
     controller_->configure(this->shared_from_this(),
                            "graceful_controller",
                            buffer_,
                            costmap_ros_);
+    // Activate everything
+    this->activate();
+    costmap_ros_->activate();
     controller_->activate();
   }
 
@@ -315,9 +317,6 @@ TEST(ControllerTests, test_basic_plan)
   command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 0.0);
-  RCLCPP_WARN(LOGGER, "Configuring and activating");
-  fixture->configure();
-  fixture->activate();
   RCLCPP_WARN(LOGGER, "Calling initialize");
   fixture->initialize();
 
@@ -498,6 +497,8 @@ TEST(ControllerTests, test_final_rotate_in_place)
 }
 
 /*
+THIS TEST IS TEMPORARILY DISABLED DUE TO ISSUES WITH THE MAP SUBSCRIBER
+
 TEST(ControllerTests, test_collision_check)
 {
   GoalCheckerFixture goal_checker;
