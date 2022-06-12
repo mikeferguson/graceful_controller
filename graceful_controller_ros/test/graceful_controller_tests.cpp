@@ -119,6 +119,8 @@ public:
 
     if (intialize)
     {
+      this->configure();
+      this->activate();
       initialize();
     }
 
@@ -127,8 +129,10 @@ public:
 
   ~ControllerFixture()
   {
-    // Stop costmap updates - otherwise this can fail with a boost::lock issue
-    costmap_ros_->stop();
+    costmap_ros_->deactivate();
+    controller_->deactivate();
+    // Release the controller
+    controller_.reset();
     // Stop our own update thread
     shutdown_ = true;
     thread_->join();
@@ -137,10 +141,13 @@ public:
 
   void initialize()
   {
+    costmap_ros_->configure();
+    costmap_ros_->activate();
     controller_->configure(this->shared_from_this(),
-                           loader_.getName("graceful_controller/GracefulControllerROS"),
+                           "graceful_controller",
                            buffer_,
                            costmap_ros_);
+    controller_->activate();
   }
 
   std::shared_ptr<nav2_core::Controller> getController()
@@ -285,13 +292,15 @@ protected:
 
 TEST(ControllerTests, test_basic_plan)
 {
+  GoalCheckerFixture goal_checker;
   std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
   ASSERT_TRUE(fixture->setup(false /* do not intialize */));
   std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
 
   nav_msgs::msg::Path plan;
   geometry_msgs::msg::PoseStamped pose;
-  pose.header.frame_id = "map";
+  plan.header.frame_id = "map";
+  pose.header.frame_id = plan.header.frame_id;
   pose.pose.orientation.w = 1.0;
   pose.pose.position.x = 1.0;
   pose.pose.position.y = 0.0;
@@ -303,14 +312,15 @@ TEST(ControllerTests, test_basic_plan)
   geometry_msgs::msg::PoseStamped robot_pose = fixture->getRobotPose();
   geometry_msgs::msg::Twist robot_velocity = fixture->getRobotVelocity();
 
-  GoalCheckerFixture goal_checker;
-
   // Unitialized controller should not be able to plan
-  //controller->setPlan(plan);
+  controller->setPlan(plan);
   geometry_msgs::msg::TwistStamped command;
-  //command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
-  //EXPECT_EQ(command.twist.linear.x, 0.0);
-  //EXPECT_EQ(command.twist.angular.z, 0.0);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  EXPECT_EQ(command.twist.linear.x, 0.0);
+  EXPECT_EQ(command.twist.angular.z, 0.0);
+  RCLCPP_WARN(LOGGER, "Configuring and activating");
+  fixture->configure();
+  fixture->activate();
   RCLCPP_WARN(LOGGER, "Calling initialize");
   fixture->initialize();
 
@@ -326,7 +336,7 @@ TEST(ControllerTests, test_basic_plan)
   fixture->setSimVelocity(0.0, 0.0);
   robot_velocity = fixture->getRobotVelocity();
 
-  // Odom reports velocity = 0, but min_vel_x is greater than acc_lim * sacc_dt
+  // Odom reports velocity = 0, but min_vel_x is greater than acc_lim * acc_dt
   command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.25);
   EXPECT_EQ(command.twist.angular.z, 0.0);
@@ -367,16 +377,19 @@ TEST(ControllerTests, test_basic_plan)
   EXPECT_EQ(command.twist.linear.x, 1.0);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 }
-/*
+
 TEST(ControllerTests, test_out_of_range)
 {
-  ControllerFixture fixture;
+  GoalCheckerFixture goal_checker;
+  std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
   ASSERT_TRUE(fixture->setup());
   std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
 
+
   nav_msgs::msg::Path plan;
   geometry_msgs::msg::PoseStamped pose;
-  pose.header.frame_id = "map";
+  plan.header.frame_id = "map";
+  pose.header.frame_id = plan.header.frame_id;
   pose.pose.orientation.w = 1.0;
   pose.pose.position.x = 1.5;
   pose.pose.position.y = 0.0;
@@ -395,20 +408,22 @@ TEST(ControllerTests, test_out_of_range)
 
   // First pose is beyond the lookahead - should fail
   geometry_msgs::msg::TwistStamped command;
-  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 }
 
 TEST(ControllerTests, test_initial_rotate_in_place)
 {
-  ControllerFixture fixture;
-  ASSERT_TRUE(fixture.setup());
-  std::shared_ptr<nav2_core::Controller> controller = fixture.getController();
+  GoalCheckerFixture goal_checker;
+  std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
+  ASSERT_TRUE(fixture->setup());
+  std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
 
   nav_msgs::msg::Path plan;
   geometry_msgs::msg::PoseStamped pose;
-  pose.header.frame_id = "map";
+  plan.header.frame_id = "map";
+  pose.header.frame_id = plan.header.frame_id;
   pose.pose.orientation.w = 1.0;
   pose.pose.position.x = -0.5;
   pose.pose.position.y = 0.0;
@@ -419,44 +434,46 @@ TEST(ControllerTests, test_initial_rotate_in_place)
   controller->setPlan(plan);
 
   // Set our velocity to 0
-  fixture.setSimVelocity(0.0, 0.0);
-  geometry_msgs::msg::PoseStamped robot_pose = fixture.getRobotPose();
-  geometry_msgs::msg::Twist robot_velocity = fixture.getRobotVelocity();
+  fixture->setSimVelocity(0.0, 0.0);
+  geometry_msgs::msg::PoseStamped robot_pose = fixture->getRobotPose();
+  geometry_msgs::msg::Twist robot_velocity = fixture->getRobotVelocity();
 
   // Odom reports velocity = 0, but min_in_place_vel_theta is 0.6
   geometry_msgs::msg::TwistStamped command;
-  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 0.6);
 
   // Set our velocity to 1.0
-  fixture.setSimVelocity(0.0, 1.0);
-  robot_velocity = fixture.getRobotVelocity();
+  fixture->setSimVelocity(0.0, 1.0);
+  robot_velocity = fixture->getRobotVelocity();
 
   // Expect limited rotation command
-  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 1.25);
 
   // Report velocity over limits
-  fixture.setSimVelocity(0.0, 4.0);
-  robot_velocity = fixture.getRobotVelocity();
+  fixture->setSimVelocity(0.0, 4.0);
+  robot_velocity = fixture->getRobotVelocity();
 
   // Expect max rotation
-  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 2.5);
 }
 
 TEST(ControllerTests, test_final_rotate_in_place)
 {
-  ControllerFixture fixture;
-  ASSERT_TRUE(fixture.setup());
-  std::shared_ptr<nav2_core::Controller> controller = fixture.getController();
+  GoalCheckerFixture goal_checker;
+  std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
+  ASSERT_TRUE(fixture->setup());
+  std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
 
   nav_msgs::msg::Path plan;
   geometry_msgs::msg::PoseStamped pose;
-  pose.header.frame_id = "map";
+  plan.header.frame_id = "map";
+  pose.header.frame_id = plan.header.frame_id;
   pose.pose.orientation.w = 1.0;
   pose.pose.position.x = 0.5;
   pose.pose.position.y = 0.0;
@@ -464,58 +481,62 @@ TEST(ControllerTests, test_final_rotate_in_place)
   controller->setPlan(plan);
 
   // Set pose to start
-  fixture.setPose(0.1, 0.0, 0.0);
-  geometry_msgs::msg::PoseStamped robot_pose = fixture.getRobotPose();
-  geometry_msgs::msg::Twist robot_velocity = fixture.getRobotVelocity();
+  fixture->setPose(0.1, 0.0, 0.0);
+  geometry_msgs::msg::PoseStamped robot_pose = fixture->getRobotPose();
+  geometry_msgs::msg::Twist robot_velocity = fixture->getRobotVelocity();
 
   // Expect forward motion at min velocity since we are aligned with only goal pose
   geometry_msgs::msg::TwistStamped command;
-  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.25);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 
   // Set our pose to the end goal, but with bad heading
-  fixture.setPose(0.5, 0.0, 1.57);
-  robot_pose = fixture.getRobotPose();
+  fixture->setPose(0.5, 0.0, 1.57);
+  robot_pose = fixture->getRobotPose();
 
   // Expect limited rotation command
-  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, -0.6);
 }
 
 TEST(ControllerTests, test_collision_check)
 {
-  ControllerFixture fixture;
-  ASSERT_TRUE(fixture.setup());
-  std::shared_ptr<nav2_core::Controller> controller = fixture.getController();
+  GoalCheckerFixture goal_checker;
+  std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
+  ASSERT_TRUE(fixture->setup());
+  std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
 
-  fixture.markMap(0.65, 0);
+  fixture->markMap(0.65, 0);
   rclcpp::sleep_for(std::chrono::milliseconds(250));
 
   nav_msgs::msg::Path plan;
   geometry_msgs::msg::PoseStamped pose;
-  pose.header.frame_id = "map";
+  plan.header.frame_id = "map";
+  pose.header.frame_id = plan.header.frame_id;
   pose.pose.orientation.w = 1.0;
   pose.pose.position.x = 0.5;
   pose.pose.position.y = 0.0;
   plan.poses.push_back(pose);
   controller->setPlan(plan);
 
-  geometry_msgs::msg::PoseStamped robot_pose = fixture.getRobotPose();
-  geometry_msgs::msg::Twist robot_velocity = fixture.getRobotVelocity();
+  geometry_msgs::msg::PoseStamped robot_pose = fixture->getRobotPose();
+  geometry_msgs::msg::Twist robot_velocity = fixture->getRobotVelocity();
 
   // Expect no command
   geometry_msgs::msg::TwistStamped command;
-  command = controller->computeVelocityCommands(robot_pose, robot_velocity, NULL);
+  command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 }
-*/
 
 int main(int argc, char** argv)
 {
-  rclcpp::init(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  rclcpp::init(argc, argv);
+  bool success = RUN_ALL_TESTS();
+  RCLCPP_WARN(LOGGER, "ALL DONE");
+  rclcpp::shutdown();
+  return success;
 }

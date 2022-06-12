@@ -5,15 +5,18 @@ import sys
 
 from launch import LaunchDescription
 from launch import LaunchService
-from launch.actions import ExecuteProcess
+from launch_ros.actions import Node
 from launch_testing.legacy import LaunchTestService
 
 
 def main(argv=sys.argv[1:]):
-    test_node = ExecuteProcess(
-        cmd=[os.getenv('TEST_EXECUTABLE')],
+    config_file = os.path.join(os.getenv('CONFIG_DIR'), 'config.yaml')
+
+    test_node = Node(
+        executable=[os.getenv('TEST_EXECUTABLE')],
         name='graceful_controller_tests',
-        output='screen'
+        parameters=[config_file],
+        output='screen',
     )
 
     ld = LaunchDescription()

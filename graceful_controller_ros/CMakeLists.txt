@@ -90,6 +90,7 @@ if(BUILD_TESTING)
     COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/test/graceful_controller_tests_launch.py"
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     ENV
+      CONFIG_DIR=${CMAKE_CURRENT_SOURCE_DIR}/test
       TEST_EXECUTABLE=$<TARGET_FILE:graceful_controller_tests>
   )
 endif()
