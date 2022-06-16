@@ -247,6 +247,8 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
   acc_lim_theta_ = config.acc_lim_theta;
   xy_goal_tolerance_ = config.xy_goal_tolerance;
   yaw_goal_tolerance_ = config.yaw_goal_tolerance;
+  xy_vel_goal_tolerance_ = config.xy_vel_goal_tolerance;
+  yaw_vel_goal_tolerance_ = config.yaw_vel_goal_tolerance;
   min_lookahead_ = config.min_lookahead;
   max_lookahead_ = config.max_lookahead;
   initial_rotate_tolerance_ = config.initial_rotate_tolerance;
@@ -326,12 +328,31 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     return false;
   }
 
+  // Get current robot speed
+  double robot_vel_x = 0.0, robot_vel_yaw = 0.0;
+  bool below_velocity_limits = true;
+  if (!odom_helper_.getOdomTopic().empty())
+  {
+    // The API of the OdometryHelperROS uses a PoseStamped
+    // but the data returned is velocities (should be a Twist)
+    geometry_msgs::PoseStamped robot_velocity;
+    odom_helper_.getRobotVel(robot_velocity);
+    robot_vel_x = fabs(robot_velocity.pose.position.x);
+    robot_vel_yaw = fabs(tf2::getYaw(robot_velocity.pose.orientation));
+    if (robot_vel_x > xy_vel_goal_tolerance_ ||
+        robot_vel_yaw > yaw_vel_goal_tolerance_)
+    {
+      // Not sufficiently stopped
+      below_velocity_limits = false;
+    }
+  }
+
   // Compute distance to goal
   double dist_to_goal = std::hypot(goal_pose.pose.position.x - robot_pose_.pose.position.x,
                                    goal_pose.pose.position.y - robot_pose_.pose.position.y);
 
   // If we've reached the XY goal tolerance, just rotate
-  if (dist_to_goal < xy_goal_tolerance_ || goal_tolerance_met_)
+  if ((dist_to_goal < xy_goal_tolerance_ && below_velocity_limits) || goal_tolerance_met_)
   {
     // Reached goal, latch if desired
     goal_tolerance_met_ = latch_xy_goal_tolerance_;
@@ -367,11 +388,7 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
   double max_vel_x = max_vel_x_;
   if (!odom_helper_.getOdomTopic().empty())
   {
-    // The API of the OdometryHelperROS uses a PoseStamped
-    // but the data returned is velocities (should be a Twist)
-    geometry_msgs::PoseStamped robot_velocity;
-    odom_helper_.getRobotVel(robot_velocity);
-    max_vel_x = robot_velocity.pose.position.x + (acc_lim_x_ * acc_dt_);
+    max_vel_x = robot_vel_x + (acc_lim_x_ * acc_dt_);
     max_vel_x = std::min(max_vel_x, max_vel_x_);
     max_vel_x = std::max(max_vel_x, min_vel_x_);
   }
@@ -606,7 +623,24 @@ bool GracefulControllerROS::isGoalReached()
 
   double dist_reached = goal_tolerance_met_ || (dist < xy_goal_tolerance_);
 
-  return dist_reached && (fabs(angle) < yaw_goal_tolerance_);
+  bool below_velocity_limits = true;
+  if (!odom_helper_.getOdomTopic().empty())
+  {
+    // The API of the OdometryHelperROS uses a PoseStamped
+    // but the data returned is velocities (should be a Twist)
+    geometry_msgs::PoseStamped robot_velocity;
+    odom_helper_.getRobotVel(robot_velocity);
+    double robot_vel_x = fabs(robot_velocity.pose.position.x);
+    double robot_vel_yaw = fabs(tf2::getYaw(robot_velocity.pose.orientation));
+    if (robot_vel_x > xy_vel_goal_tolerance_ ||
+        robot_vel_yaw > yaw_vel_goal_tolerance_)
+    {
+      // Not sufficiently stopped
+      below_velocity_limits = false;
+    }
+  }
+
+  return dist_reached && (fabs(angle) < yaw_goal_tolerance_) && below_velocity_limits;
 }
 
 bool GracefulControllerROS::setPlan(const std::vector<geometry_msgs::PoseStamped>& plan)

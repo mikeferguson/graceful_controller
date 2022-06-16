@@ -145,6 +145,8 @@ private:
   double scaling_step_;
   double xy_goal_tolerance_;
   double yaw_goal_tolerance_;
+  double xy_vel_goal_tolerance_;
+  double yaw_vel_goal_tolerance_;
   double min_lookahead_;
   double max_lookahead_;
   double resolution_;
