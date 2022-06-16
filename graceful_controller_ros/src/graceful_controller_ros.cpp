@@ -688,7 +688,7 @@ double GracefulControllerROS::rotateTowards(const geometry_msgs::PoseStamped& po
   }
 
   cmd_vel.linear.x = 0.0;
-  cmd_vel.angular.z = 2 * acc_lim_theta_ * fabs(yaw);
+  cmd_vel.angular.z = std::sqrt(2 * acc_lim_theta_ * fabs(yaw));
   cmd_vel.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
 
   // Return error
