@@ -669,7 +669,7 @@ double GracefulControllerROS::rotateTowards(
   }
 
   cmd_vel.twist.linear.x = 0.0;
-  cmd_vel.twist.angular.z = 2 * acc_lim_theta_ * fabs(yaw);
+  cmd_vel.twist.angular.z = std::sqrt(2 * acc_lim_theta_ * fabs(yaw));
   cmd_vel.twist.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.twist.angular.z));
 
   // Return error
