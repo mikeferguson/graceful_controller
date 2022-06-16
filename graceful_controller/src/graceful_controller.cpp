@@ -31,7 +31,7 @@ namespace graceful_controller
 
 GracefulController::GracefulController(double k1, double k2,
                                        double min_velocity, double max_velocity,
-                                       double max_accel,
+                                       double max_decel,
                                        double max_angular_velocity,
                                        double beta, double lambda)
 {
@@ -39,7 +39,7 @@ GracefulController::GracefulController(double k1, double k2,
   k2_ = k2;
   min_velocity_ = min_velocity;
   max_velocity_ = max_velocity;
-  max_accel_ = max_accel;
+  max_decel_ = max_decel;
   max_angular_velocity_ = max_angular_velocity;
   beta_ = beta;
   lambda_ = lambda;
@@ -66,7 +66,7 @@ bool GracefulController::approach(const double x, const double y, const double t
   // Compute max_velocity based on curvature
   double v = max_velocity_ / (1 + beta_ * std::pow(fabs(k), lambda_));
   // Limit velocity based on approaching target
-  double approach_limit = std::sqrt(2 * max_accel_ * r);
+  double approach_limit = std::sqrt(2 * max_decel_ * r);
   v = std::min(v, approach_limit);
   v = std::min(std::max(v, min_velocity_), max_velocity_);
 

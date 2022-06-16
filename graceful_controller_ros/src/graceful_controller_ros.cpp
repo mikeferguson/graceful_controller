@@ -245,6 +245,7 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
   min_in_place_vel_theta_ = config.min_in_place_vel_theta;
   acc_lim_x_ = config.acc_lim_x;
   acc_lim_theta_ = config.acc_lim_theta;
+  decel_lim_x_ = config.decel_lim_x;
   xy_goal_tolerance_ = config.xy_goal_tolerance;
   yaw_goal_tolerance_ = config.yaw_goal_tolerance;
   xy_vel_goal_tolerance_ = config.xy_vel_goal_tolerance;
@@ -260,8 +261,14 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
   latch_xy_goal_tolerance_ = config.latch_xy_goal_tolerance;
   resolution_ = planner_util_.getCostmap()->getResolution();
 
+  if (decel_lim_x_ < 0.001)
+  {
+    // If decel limit not specified, use accel limit
+    decel_lim_x_ = acc_lim_x_;
+  }
+
   controller_ =
-      std::make_shared<GracefulController>(config.k1, config.k2, config.min_vel_x, config.max_vel_x, config.acc_lim_x,
+      std::make_shared<GracefulController>(config.k1, config.k2, config.min_vel_x, config.max_vel_x, decel_lim_x_,
                                            config.max_vel_theta, config.beta, config.lambda);
 
   scaling_vel_x_ = std::max(config.scaling_vel_x, config.min_vel_x);
