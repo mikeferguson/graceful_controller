@@ -165,6 +165,7 @@ private:
   double min_in_place_vel_theta_;
   double acc_lim_x_;
   double acc_lim_theta_;
+  double decel_lim_x_;
   double scaling_vel_x_;
   double scaling_factor_;
   double scaling_step_;

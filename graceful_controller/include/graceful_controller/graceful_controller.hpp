@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Michael Ferguson
+ * Copyright 2021-2022 Michael Ferguson
  * Copyright 2015 Fetch Robotics Inc
  * Author: Michael Ferguson
  *
@@ -35,14 +35,14 @@ public:
    * @param k2 How quickly we converge to the slow manifold.
    * @param min_velocity The minimum velocity in the linear direction.
    * @param max_velocity The maximum velocity in the linear direction.
-   * @param max_accel The maximum acceleration in the linear direction.
+   * @param max_decel The maximum deceleration in the linear direction.
    * @param max_angular_velocity The maximum velocity in the linear direction.
    */
   GracefulController(double k1,
                      double k2,
                      double min_velocity,
                      double max_velocity,
-                     double max_accel,
+                     double max_decel,
                      double max_angular_velocity,
                      double beta,
                      double lambda);
@@ -79,7 +79,7 @@ private:
   double k2_;  // speed at which we converge to slow system
   double min_velocity_;
   double max_velocity_;
-  double max_accel_;
+  double max_decel_;
   double max_angular_velocity_;
   double beta_;  // how fast velocity drops as k increases
   double lambda_;  // ??
