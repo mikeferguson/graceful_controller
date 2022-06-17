@@ -96,11 +96,10 @@ public:
   bool setup(bool do_init = true)
   {
     // ROS topics to run the test
-    rclcpp::QoS map_qos(10);
+    rclcpp::QoS map_qos(rclcpp::KeepLast(1));
     map_qos.transient_local();
     map_qos.reliable();
-    map_qos.keep_last(1);
-    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map_raw", map_qos);
+    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", map_qos);
 
     // Need to start publishing odom before we initialize the costmap
     resetMap();
@@ -196,8 +195,11 @@ public:
       return false;
     }
 
+    RCLCPP_WARN(LOGGER, "**** Publishing new map ****");
     map_.data[ix + (iy * map_.info.width)] = 100;
-    map_pub_->publish(map_);
+    auto msg = std::make_unique<nav_msgs::msg::OccupancyGrid>(map_);
+    map_pub_->publish(std::move(msg));
+    rclcpp::sleep_for(std::chrono::seconds(1));
     return true;
   }
 
