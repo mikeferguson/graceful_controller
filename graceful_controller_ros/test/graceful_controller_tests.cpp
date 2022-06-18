@@ -107,8 +107,6 @@ public:
     setSimVelocity(0.0, 0.0);
     thread_ = new std::thread(std::bind(&ControllerFixture::updateThread, this));
 
-    rclcpp::sleep_for(std::chrono::milliseconds(250));
-
     // Costmap for testing
     costmap_ros_.reset(new nav2_costmap_2d::Costmap2DROS("costmap"));
 
@@ -195,11 +193,8 @@ public:
       return false;
     }
 
-    RCLCPP_WARN(LOGGER, "**** Publishing new map ****");
     map_.data[ix + (iy * map_.info.width)] = 100;
-    auto msg = std::make_unique<nav_msgs::msg::OccupancyGrid>(map_);
-    map_pub_->publish(std::move(msg));
-    rclcpp::sleep_for(std::chrono::seconds(1));
+    map_pub_->publish(map_);
     return true;
   }
 
@@ -279,8 +274,9 @@ protected:
       transform.transform.rotation = odom_.pose.pose.orientation;
       broadcaster_->sendTransform(transform);
 
-    map_pub_->publish(map_);
       rclcpp::spin_some(this->get_node_base_interface());
+      if (costmap_ros_)
+        rclcpp::spin_some(costmap_ros_->get_node_base_interface());
       rclcpp::sleep_for(std::chrono::milliseconds(50));
     }
   }
@@ -298,13 +294,11 @@ protected:
   bool shutdown_;
 };
 
-/*
 TEST(ControllerTests, test_basic_plan)
 {
   GoalCheckerFixture goal_checker;
-  std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());*/
-  //ASSERT_TRUE(fixture->setup(false /* do not initialize */));
-/*
+  std::shared_ptr<ControllerFixture> fixture(new ControllerFixture());
+  ASSERT_TRUE(fixture->setup(false /* do not initialize */));
   std::shared_ptr<nav2_core::Controller> controller = fixture->getController();
 
   nav_msgs::msg::Path plan;
@@ -506,7 +500,6 @@ TEST(ControllerTests, test_final_rotate_in_place)
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, -0.6);
 }
-*/
 
 TEST(ControllerTests, test_collision_check)
 {
@@ -542,8 +535,6 @@ int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);
-  rclcpp::get_logger("nav2_costmap_2d").set_level(rclcpp::Logger::Level::Debug);
-  rclcpp::get_logger("costmap").set_level(rclcpp::Logger::Level::Debug);
   bool success = RUN_ALL_TESTS();
   rclcpp::shutdown();
   return success;
