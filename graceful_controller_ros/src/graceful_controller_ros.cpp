@@ -191,6 +191,7 @@ void GracefulControllerROS::configure(
   declare_parameter_if_not_declared(node, name_ + ".acc_lim_x", rclcpp::ParameterValue(2.5));
   declare_parameter_if_not_declared(node, name_ + ".acc_lim_theta", rclcpp::ParameterValue(3.2));
   declare_parameter_if_not_declared(node, name_ + ".acc_dt", rclcpp::ParameterValue(0.25));
+  declare_parameter_if_not_declared(node, name_ + ".decel_lim_x", rclcpp::ParameterValue(0.0));
   declare_parameter_if_not_declared(node, name_ + ".max_lookahead", rclcpp::ParameterValue(1.0));
   declare_parameter_if_not_declared(node, name_ + ".min_lookahead", rclcpp::ParameterValue(0.25));
   declare_parameter_if_not_declared(node, name_ + ".initial_rotate_tolerance", rclcpp::ParameterValue(0.1));
@@ -216,6 +217,7 @@ void GracefulControllerROS::configure(
   node->get_parameter(name_ + ".acc_lim_x", acc_lim_x_);
   node->get_parameter(name_ + ".acc_lim_theta", acc_lim_theta_);
   node->get_parameter(name_ + ".acc_dt", acc_dt_);
+  node->get_parameter(name_ + ".decel_lim_x", decel_lim_x_);
   node->get_parameter(name_ + ".max_lookahead", max_lookahead_);
   node->get_parameter(name_ + ".min_lookahead", min_lookahead_);
   node->get_parameter(name_ + ".initial_rotate_tolerance", initial_rotate_tolerance_);
@@ -251,11 +253,17 @@ void GracefulControllerROS::configure(
     collision_points_ = new visualization_msgs::msg::MarkerArray();
   }
 
+  if (decel_lim_x_ < 0.001)
+  {
+    // If decel limit not specified, use accel_limit
+    decel_lim_x_ = acc_lim_x_;
+  }
+
   controller_ = std::make_shared<GracefulController>(k1,
                                                      k2,
                                                      min_vel_x_,
                                                      max_vel_x_,
-                                                     acc_lim_x_,
+                                                     decel_lim_x_,
                                                      max_vel_theta_,
                                                      beta,
                                                      lambda);
