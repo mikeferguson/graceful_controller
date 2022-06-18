@@ -96,7 +96,10 @@ public:
   bool setup(bool do_init = true)
   {
     // ROS topics to run the test
-    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("map", rclcpp::QoS(1).transient_local());
+    rclcpp::QoS map_qos(rclcpp::KeepLast(1));
+    map_qos.transient_local();
+    map_qos.reliable();
+    map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("/map", map_qos);
 
     // Need to start publishing odom before we initialize the costmap
     resetMap();
@@ -272,6 +275,8 @@ protected:
       broadcaster_->sendTransform(transform);
 
       rclcpp::spin_some(this->get_node_base_interface());
+      if (costmap_ros_)
+        rclcpp::spin_some(costmap_ros_->get_node_base_interface());
       rclcpp::sleep_for(std::chrono::milliseconds(50));
     }
   }
@@ -496,9 +501,6 @@ TEST(ControllerTests, test_final_rotate_in_place)
   EXPECT_EQ(command.twist.angular.z, -0.6);
 }
 
-/*
-THIS TEST IS TEMPORARILY DISABLED DUE TO ISSUES WITH THE MAP SUBSCRIBER
-
 TEST(ControllerTests, test_collision_check)
 {
   GoalCheckerFixture goal_checker;
@@ -528,7 +530,6 @@ TEST(ControllerTests, test_collision_check)
   EXPECT_EQ(command.twist.linear.x, 0.0);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 }
-*/
 
 int main(int argc, char** argv)
 {
