@@ -9,7 +9,7 @@ describes how to switch between poses along a path). Instead this controller
 has a naive approach which attempts to find the farthest pose in the path
 which is both A) less than some maximum lookahead distance away, and B)
 reachable (without collision) using our control law (as determined by
-a forward simulation).
+a forward simulation). We call this the **target_pose**.
 
 ## ROS Topics
 
@@ -52,6 +52,10 @@ to compute the control law:
    If the controller cannot forward simulate to a pose this far away without
    colliding, it will iteratively select a target pose that is closer to the
    robot.
+* **min_lookhead** - the target pose cannot be closer than this distance
+   away from the robot. This parameter avoids instability when an unexpected
+   obstacle appears in the path of the robot by returning failure, which
+   typically triggers replanning.
 * **acc_dt** - this parameter is used to set the maximum velocity that the
    control law can use when generating velocities during the path simulation.
 
@@ -82,10 +86,25 @@ one or more parameters:
    true, the orientation of the final pose will be ignored and the robot will
    more closely follow the path as planned and then produce a final in-place
    rotation to align the robot heading with the goal.
- * **yaw_filter_tolerance** - since the controller is highly dependent on the
+ * **latch_xy_goal_tolerance** - similar to many other local controllers in ROS,
+   this will prevent hunting around the goal by latching the XY portion of the
+   goal when the robot is within the goal tolerance. The robot will then rotate
+   to the final heading (while possibly being outside of the real XY goal tolerance).
+ * **compute_orientations** - if the global planner does not compute orientations
+   for the poses in the path, this should be set to true.
+ * **use_orientation_filter** - since the controller is highly dependent on the
    angular heading of the target pose it is important the angular values are
    smooth. Some global planners may produce very unsmooth headings due to
-   discretization errors.
+   discretization error. This optional filuter can be used to smooth
+   out the orientations of the global path based on the **yaw_filter_tolerance**
+   and **yaw_gap_tolerance**.
+ * **yaw_filter_tolerance** - a higher value here allows a path to be more
+   zig-zag, a lower filter value will filter out poses whose headings diverge
+   from an overall "beeline" between the poses around it. units: radians
+ * **yaw_gap_tolerance** - this is the maximum distance between poses, and
+   so even if a pose exceeds the filter tolerance it will not be removed
+   if the gap between the pose before and after it would exceed this value.
+   units: meters.
 
 Most of the above parameters can be left to their defaults and work well
 on a majority of robots. The following parameters, however, really do
@@ -97,6 +116,11 @@ possible:
    be able to follow the generated commands. During braking, this can cause
    the robot to crash into obstacles. Units: meters/sec^2.
  * **acc_lim_theta** - the same notes as for _acc_lim_x_, but in rad/sec^2.
+ * **decel_lim_x** - (new in 0.4.3) this acceleration limit is used only
+   within the underlying control law. It controls how quickly the robot slows
+   as it approaches the goal (or an obstacle blocking the path, which causes
+   the target_pose to be closer). If this is left as the default of 0.0, the
+   controller will use the same acc_lim_x. Units: meters/sec^2.
  * **max_vel_x** - this is the maximum velocity the controller is allowed to
    specify. Units: meters/sec.
  * **min_vel_x** - when the commanded velocities have a high curvature, the
@@ -117,6 +141,37 @@ possible:
    generate final rotations once this tolerance is met. Units: meters.
  * **yaw_goal_tolerance** - this is the angular distance within which we consider
    the goal reached. Units: radians.
+ * **xy_vel_goal_tolerance** - this is the maximum linear velocity the robot
+   can be moving in order to switch to final in place rotation, latch the
+   goal, or report that the goal has been reached. This parameter is ignored
+   if no **odom_topic** is set.
+ * **yaw_vel_goal_tolerance** - this is the maximum angular velocity the robot
+   can be moving in order to switch to final in place rotation, latch the
+   goal, or report that the goal has been reached. This parameter is ignored
+   if no **odom_topic** is set.
+
+A final feature of the controller is footprint inflation at higher speeds. This
+helps avoid collisions by increasing the padding around the robot as the speed
+increases. This behavior is controlled by three parameters:
+
+ * **scaling_vel_x** - above this speed, the footprint will be scaled up.
+   units: meters/sec.
+ * **scaling_factor** - this is how much the footprint will be scaled when
+   we are moving at max_vel_x. The actual footprint size will be:
+   1.0 + scaling_factor * (vel - scaling_vel_x) / (max_vel_x - scaling_vel_x).
+   By default, this is set to 0.0 and thus disabled.
+ * **scaling_step** - this is how much we will drop the simulated velocity
+   when retrying a particular target_pose.
+
+Example: our robot has a max velocity of 1.0 meters/second, **scaling_vel_x**
+of 0.5 meters/second, and a **scaling_factor** of 1.0. For a particular
+target_pose, if we are simulating the trajectory at 1.0 meters/second, then
+the footprint will be multiplied in size by a factor of 2.0. Suppose this
+triggers a collision in simulation of the path and that our **scaling_step**
+is 0.1 meters/second. The controller will re-simulate at 0.9 meters/second,
+and now our footprint will only be scaled by a factor of 1.8. If this were
+not collision free, the controller would re-simulate with a velocity of
+0.8 meters/second and a scaling of 1.6.
 
 ## Example Config
 
