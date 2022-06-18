@@ -2,6 +2,22 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* use separate decel_lim_x for control law (`#45 <https://github.com/mikeferguson/graceful_controller/issues/45>`_)
+* add velocity limit to goal tolerance (`#44 <https://github.com/mikeferguson/graceful_controller/issues/44>`_)
+* fix deceleration time (`#43 <https://github.com/mikeferguson/graceful_controller/issues/43>`_)
+  this reverts `#6 <https://github.com/mikeferguson/graceful_controller/issues/6>`_, to what is apparently the correct math
+* add footprint inflation for higher speeds (`#32 <https://github.com/mikeferguson/graceful_controller/issues/32>`_)
+  * add a feature to inflate the footprint at higher speeds
+  * only update max_vel_x once per call
+* initialze collision_points\_ to null (`#35 <https://github.com/mikeferguson/graceful_controller/issues/35>`_)
+* add optional visualization of colliding points (`#34 <https://github.com/mikeferguson/graceful_controller/issues/34>`_)
+* split out hpp file, clang format (`#33 <https://github.com/mikeferguson/graceful_controller/issues/33>`_)
+* fix bug in latch_xy_goal_tolerance (`#31 <https://github.com/mikeferguson/graceful_controller/issues/31>`_)
+  While the main control loop can latch the goal (thus it will stop trying to hunt around) - that isn't understood by the isGoalReached() function - which leads to the robot wiggling back and forth for a while
+* Contributors: Michael Ferguson
+
 0.4.2 (2022-03-29)
 ------------------
 * fix goal tolerance reset (`#29 <https://github.com/mikeferguson/graceful_controller/issues/29>`_)

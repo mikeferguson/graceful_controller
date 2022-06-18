@@ -2,6 +2,13 @@
 Changelog for package graceful_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* use separate decel_lim_x for control law (`#45 <https://github.com/mikeferguson/graceful_controller/issues/45>`_)
+* fix deceleration time (`#43 <https://github.com/mikeferguson/graceful_controller/issues/43>`_)
+  this reverts `#6 <https://github.com/mikeferguson/graceful_controller/issues/6>`_, to what is apparently the correct math
+* Contributors: Michael Ferguson
+
 0.4.2 (2022-03-29)
 ------------------
 
