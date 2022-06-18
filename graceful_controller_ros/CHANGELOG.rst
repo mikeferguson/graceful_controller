@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.3 (2022-06-18)
+------------------
 * use separate decel_lim_x for control law (`#45 <https://github.com/mikeferguson/graceful_controller/issues/45>`_)
 * add velocity limit to goal tolerance (`#44 <https://github.com/mikeferguson/graceful_controller/issues/44>`_)
 * fix deceleration time (`#43 <https://github.com/mikeferguson/graceful_controller/issues/43>`_)
