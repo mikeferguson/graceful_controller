@@ -150,6 +150,29 @@ possible:
    goal, or report that the goal has been reached. This parameter is ignored
    if no **odom_topic** is set.
 
+A final feature of the controller is footprint inflation at higher speeds. This
+helps avoid collisions by increasing the padding around the robot as the speed
+increases. This behavior is controlled by three parameters:
+
+ * **scaling_vel_x** - above this speed, the footprint will be scaled up.
+   units: meters/sec.
+ * **scaling_factor** - this is how much the footprint will be scaled when
+   we are moving at max_vel_x. The actual footprint size will be:
+   1.0 + scaling_factor * (vel - scaling_vel_x) / (max_vel_x - scaling_vel_x).
+   By default, this is set to 0.0 and thus disabled.
+ * **scaling_step** - this is how much we will drop the simulated velocity
+   when retrying a particular target_pose.
+
+Example: our robot has a max velocity of 1.0 meters/second, **scaling_vel_x**
+of 0.5 meters/second, and a **scaling_factor** of 1.0. For a particular
+target_pose, if we are simulating the trajectory at 1.0 meters/second, then
+the footprint will be multiplied in size by a factor of 2.0. Suppose this
+triggers a collision in simulation of the path and that our **scaling_step**
+is 0.1 meters/second. The controller will re-simulate at 0.9 meters/second,
+and now our footprint will only be scaled by a factor of 1.8. If this were
+not collision free, the controller would re-simulate with a velocity of
+0.8 meters/second and a scaling of 1.6.
+
 ## Example Config
 
 There is an example configuration for running this controller on the UBR1
