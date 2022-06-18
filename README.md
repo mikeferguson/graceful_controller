@@ -9,7 +9,7 @@ describes how to switch between poses along a path). Instead this controller
 has a naive approach which attempts to find the farthest pose in the path
 which is both A) less than some maximum lookahead distance away, and B)
 reachable (without collision) using our control law (as determined by
-a forward simulation).
+a forward simulation). We call this the **target_pose**.
 
 ## ROS Topics
 
