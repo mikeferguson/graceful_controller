@@ -365,7 +365,7 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     goal_tolerance_met_ = latch_xy_goal_tolerance_;
     // Compute velocity required to rotate towards goal
     tf2::doTransform(transformed_plan.back(), goal_pose, costmap_to_robot);
-    rotateTowards(goal_pose, cmd_vel);
+    rotateTowards(tf2::getYaw(goal_pose.pose.orientation), cmd_vel);
     // Check for collisions between our current pose and goal
     double yaw_start = tf2::getYaw(robot_pose_.pose.orientation);
     double yaw_end = tf2::getYaw(goal_pose.pose.orientation);
@@ -708,12 +708,20 @@ double GracefulControllerROS::rotateTowards(const geometry_msgs::PoseStamped& po
   else
   {
     // Goal is nearby, align heading
-    tf2::Quaternion orientation;
     yaw = tf2::getYaw(pose.pose.orientation);
   }
 
   ROS_DEBUG_NAMED("graceful_controller", "Rotating towards goal, error = %f", yaw);
 
+  // Compute command velocity
+  rotateTowards(yaw, cmd_vel);
+
+  // Return error
+  return yaw;
+}
+
+void GracefulControllerROS::rotateTowards(double yaw, geometry_msgs::Twist& cmd_vel)
+{
   // Determine max velocity based on current speed
   double max_vel_th = max_vel_theta_;
   if (!odom_helper_.getOdomTopic().empty())
@@ -731,9 +739,6 @@ double GracefulControllerROS::rotateTowards(const geometry_msgs::PoseStamped& po
   cmd_vel.linear.x = 0.0;
   cmd_vel.angular.z = std::sqrt(2 * acc_lim_theta_ * fabs(yaw));
   cmd_vel.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.angular.z));
-
-  // Return error
-  return yaw;
 }
 
 void GracefulControllerROS::velocityCallback(const std_msgs::Float32::ConstPtr& max_vel_x)
