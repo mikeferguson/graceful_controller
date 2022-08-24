@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.4 (2022-08-24)
+------------------
 * always rotate to match desired heading (`#54 <https://github.com/mikeferguson/graceful_controller/issues/54>`_)
   If the goal tolerances are large (greater than 0.5m) the
   robot might end up trying to point at the goal rather than
