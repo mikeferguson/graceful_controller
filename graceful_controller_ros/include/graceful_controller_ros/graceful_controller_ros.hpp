@@ -108,6 +108,13 @@ public:
    */
   double rotateTowards(const geometry_msgs::PoseStamped& pose, geometry_msgs::Twist& cmd_vel);
 
+  /**
+   * @brief Rotate the robot towards an angle.
+   * @param yaw The angle to rotate.
+   * @param cmd_vel The returned command velocity.
+   */
+  void rotateTowards(double yaw, geometry_msgs::Twist& cmd_vel);
+
 private:
   void velocityCallback(const std_msgs::Float32::ConstPtr& max_vel_x);
 
