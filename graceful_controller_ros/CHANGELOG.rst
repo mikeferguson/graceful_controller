@@ -2,6 +2,14 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* always rotate to match desired heading (`#54 <https://github.com/mikeferguson/graceful_controller/issues/54>`_)
+  If the goal tolerances are large (greater than 0.5m) the
+  robot might end up trying to point at the goal rather than
+  aligning with the goal heading
+* Contributors: Michael Ferguson
+
 0.4.3 (2022-06-18)
 ------------------
 * use separate decel_lim_x for control law (`#45 <https://github.com/mikeferguson/graceful_controller/issues/45>`_)

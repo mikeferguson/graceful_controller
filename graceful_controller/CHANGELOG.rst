@@ -2,6 +2,9 @@
 Changelog for package graceful_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+
 0.4.3 (2022-06-18)
 ------------------
 * use separate decel_lim_x for control law (`#45 <https://github.com/mikeferguson/graceful_controller/issues/45>`_)
