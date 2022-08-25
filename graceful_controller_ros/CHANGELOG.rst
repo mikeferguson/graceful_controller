@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.5 (2022-08-24)
+------------------
 * compute lookahead as distance along path (`#55 <https://github.com/mikeferguson/graceful_controller/issues/55>`_)
 * Contributors: Michael Ferguson
 
