@@ -2,6 +2,11 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* compute lookahead as distance along path (`#55 <https://github.com/mikeferguson/graceful_controller/issues/55>`_)
+* Contributors: Michael Ferguson
+
 0.4.4 (2022-08-24)
 ------------------
 * always rotate to match desired heading (`#54 <https://github.com/mikeferguson/graceful_controller/issues/54>`_)
