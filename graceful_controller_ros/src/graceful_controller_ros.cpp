@@ -400,6 +400,28 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     max_vel_x = std::max(max_vel_x, min_vel_x_);
   }
 
+  // Compute distance along path
+  std::vector<geometry_msgs::PoseStamped> target_poses;
+  std::vector<double> target_distances;
+  target_poses.resize(transformed_plan.size());
+  target_distances.resize(transformed_plan.size());
+  for (size_t i = 0; i < transformed_plan.size(); ++i)
+  {
+    // Transform potential target pose into base_link
+    tf2::doTransform(transformed_plan[i], target_poses[i], costmap_to_robot);
+
+    // No accumulation needed
+    if (i == 0)
+    {
+      target_distances[0] = 0.0;
+      continue;
+    }
+
+    target_distances[i] = target_distances[i - 1] +
+                          std::hypot(target_poses[i].pose.position.x - target_poses[i - 1].pose.position.x,
+                                     target_poses[i].pose.position.y - target_poses[i - 1].pose.position.y);
+  }
+
   // Work back from the end of plan to find valid target pose
   for (int i = transformed_plan.size() - 1; i >= 0; --i)
   {
@@ -407,13 +429,10 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     //  * Be as far away as possible from the robot (for smoothness)
     //  * But no further than the max_lookahed_ distance
     //  * Be feasible to reach in a collision free manner
-    geometry_msgs::PoseStamped target_pose;
-
-    // Transform potential target pose into base_link
-    tf2::doTransform(transformed_plan[i], target_pose, costmap_to_robot);
+    geometry_msgs::PoseStamped target_pose = target_poses[i];
+    double dist_to_target = target_distances[i];
 
     // Continue if target_pose is too far away from robot
-    double dist_to_target = std::hypot(target_pose.pose.position.x, target_pose.pose.position.y);
     if (dist_to_target > max_lookahead_)
     {
       continue;
