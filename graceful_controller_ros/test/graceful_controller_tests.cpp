@@ -47,6 +47,9 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/utils.h>
 
+// Only needed for computeDistanceAlongPath tests
+#include <graceful_controller_ros/graceful_controller_ros.hpp>
+
 class ControllerFixture
 {
 public:
@@ -456,13 +459,13 @@ TEST(ControllerTests, test_compute_distance_along_path)
   for (int i = 0; i < 5; ++i)
   {
     geometry_msgs::PoseStamped pose;
-    pose.position.x = (i - 2);
-    pose.position.y = 0;
+    pose.pose.position.x = (i - 2);
+    pose.pose.position.y = 0;
     poses.push_back(pose);
   }
 
   // Check distances
-  computeDistanceAlongPath(poses, distances);
+  graceful_controller::computeDistanceAlongPath(poses, distances);
   EXPECT_EQ(distances[0], 2);
   EXPECT_EQ(distances[1], 1);
   EXPECT_EQ(distances[2], 0);
@@ -473,19 +476,19 @@ TEST(ControllerTests, test_compute_distance_along_path)
   distances.clear();
   {
     geometry_msgs::PoseStamped pose;
-    pose.position.x = 2;
-    pose.position.y = 1;
+    pose.pose.position.x = 2;
+    pose.pose.position.y = 1;
     poses.push_back(pose);
-    pose.position.x = 1;
-    pose.position.y = 1;
+    pose.pose.position.x = 1;
+    pose.pose.position.y = 1;
     poses.push_back(pose);
-    pose.position.x = 0;
-    pose.position.y = 1;
+    pose.pose.position.x = 0;
+    pose.pose.position.y = 1;
     poses.push_back(pose);
   }
 
   // Check distances
-  computeDistanceAlongPath(poses, distances);
+  graceful_controller::computeDistanceAlongPath(poses, distances);
   EXPECT_EQ(distances[0], 2);
   EXPECT_EQ(distances[1], 1);
   EXPECT_EQ(distances[2], 0);

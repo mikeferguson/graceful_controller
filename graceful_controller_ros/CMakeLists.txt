@@ -76,6 +76,7 @@ if(CATKIN_ENABLE_TESTING)
   target_link_libraries(graceful_controller_tests
     ${catkin_LIBRARIES}
     ${GTEST_LIBRARIES}
+    graceful_controller_ros
   )
   add_dependencies(tests graceful_controller_tests)
   add_rostest(test/graceful_controller.test)
