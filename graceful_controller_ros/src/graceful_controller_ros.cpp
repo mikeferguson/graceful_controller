@@ -403,24 +403,14 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
   // Compute distance along path
   std::vector<geometry_msgs::PoseStamped> target_poses;
   std::vector<double> target_distances;
-  target_poses.resize(transformed_plan.size());
-  target_distances.resize(transformed_plan.size());
-  for (size_t i = 0; i < transformed_plan.size(); ++i)
+  for (auto pose : transformed_plan)
   {
     // Transform potential target pose into base_link
-    tf2::doTransform(transformed_plan[i], target_poses[i], costmap_to_robot);
-
-    // No accumulation needed
-    if (i == 0)
-    {
-      target_distances[0] = 0.0;
-      continue;
-    }
-
-    target_distances[i] = target_distances[i - 1] +
-                          std::hypot(target_poses[i].pose.position.x - target_poses[i - 1].pose.position.x,
-                                     target_poses[i].pose.position.y - target_poses[i - 1].pose.position.y);
+    geometry_msgs::PoseStamped transformed_pose;
+    tf2::doTransform(pose, transformed_pose, costmap_to_robot);
+    target_poses.push_back(transformed_pose);
   }
+  computeDistanceAlongPath(target_poses, target_distances);
 
   // Work back from the end of plan to find valid target pose
   for (int i = transformed_plan.size() - 1; i >= 0; --i)
@@ -766,6 +756,31 @@ void GracefulControllerROS::velocityCallback(const std_msgs::Float32::ConstPtr& 
   std::lock_guard<std::mutex> lock(config_mutex_);
 
   max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
+}
+
+void computeDistanceAlongPath(const std::vector<geometry_msgs::PoseStamped>& poses,
+                              std::vector<double>& distances)
+{
+  distances.resize(poses.size());
+
+  // First compute distance from robot to pose
+  for (size_t i = 0; i < poses.size(); ++i)
+  {
+    // Determine distance from robot to pose
+    distances[i] = std::hypot(poses[i].pose.position.x, poses[i].pose.position.y);
+  }
+
+  // Find the closest target pose
+  auto closest = std::min_element(std::begin(distances), std::end(distances));
+
+  // Sum distances between poses, starting with the closest pose
+  // Yes, the poses behind the robot will still use euclidean distance from robot, but we don't use those anyways
+  for (size_t i = std::distance(std::begin(distances), closest) + 1; i < distances.size(); ++i)
+  {
+    distances[i] = distances[i - 1] +
+                   std::hypot(poses[i].pose.position.x - poses[i - 1].pose.position.x,
+                              poses[i].pose.position.y - poses[i - 1].pose.position.y);
+  }
 }
 
 }  // namespace graceful_controller
