@@ -180,6 +180,15 @@ private:
   geometry_msgs::PoseStamped robot_pose_;
 };
 
+/**
+ * @brief Compute distance of poses along a path. Assumes poses are in robot-centric frame.
+ * @param poses The poses that form the path.
+ * @param distances Computed distance for each pose from the robot, along the path.
+ *                  Returned by reference.
+ */
+void computeDistanceAlongPath(const std::vector<geometry_msgs::PoseStamped>& poses,
+                              std::vector<double>& distances);
+
 }  // namespace graceful_controller
 
 #endif  // GRACEFUL_CONTROLLER_ROS_GRACEFUL_CONTROLLER_ROS_HPP
