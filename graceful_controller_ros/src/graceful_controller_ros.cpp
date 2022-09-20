@@ -369,7 +369,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     // Reached goal, latch if desired
     goal_tolerance_met_ = latch_xy_goal_tolerance_;
     // Compute velocity required to rotate towards goal
-    rotateTowards(goal_pose, velocity, cmd_vel);
+    rotateTowards(tf2::getYaw(goal_pose.pose.orientation), velocity, cmd_vel);
     // Check for collisions between our current pose and goal
     double yaw_delta = tf2::getYaw(goal_pose.pose.orientation);
     size_t num_steps = fabs(yaw_delta) / 0.1;
@@ -660,12 +660,23 @@ double GracefulControllerROS::rotateTowards(
   else
   {
     // Goal is nearby, align heading
-    tf2::Quaternion orientation;
     yaw = tf2::getYaw(pose.pose.orientation);
   }
 
   RCLCPP_DEBUG(LOGGER, "Rotating towards goal, error = %f", yaw);
 
+  // Compute command velocity
+  rotateTowards(yaw, velocity, cmd_vel);
+
+  // Return error
+  return yaw;
+}
+
+void GracefulControllerROS::rotateTowards(
+  double yaw,
+  const geometry_msgs::msg::Twist& velocity,
+  geometry_msgs::msg::TwistStamped& cmd_vel)
+{
   // Determine max velocity based on current speed
   double max_vel_th = max_vel_theta_;
   if (acc_dt_ > 0.0)
@@ -679,9 +690,6 @@ double GracefulControllerROS::rotateTowards(
   cmd_vel.twist.linear.x = 0.0;
   cmd_vel.twist.angular.z = std::sqrt(2 * acc_lim_theta_ * fabs(yaw));
   cmd_vel.twist.angular.z = sign(yaw) * std::min(max_vel_th, std::max(min_in_place_vel_theta_, cmd_vel.twist.angular.z));
-
-  // Return error
-  return yaw;
 }
 
 void GracefulControllerROS::setSpeedLimit(const double& speed_limit, const bool& percentage)
