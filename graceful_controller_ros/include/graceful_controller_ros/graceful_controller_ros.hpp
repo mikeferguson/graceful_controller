@@ -119,6 +119,16 @@ public:
                        geometry_msgs::msg::TwistStamped& cmd_vel);
 
   /**
+    * @brief Rotate the robot towards an angle.
+    * @param yaw The angle to rotate.
+    * @param velocity Current robot velocity.
+    * @param cmd_vel The returned command velocity.
+    */
+  void rotateTowards(double yaw,
+                     const geometry_msgs::msg::Twist& velocity,
+                     geometry_msgs::msg::TwistStamped& cmd_vel);
+
+  /**
    * @brief Limits the maximum linear speed of the robot.
    * @param speed_limit expressed in absolute value (in m/s)
    * or in percentage from maximum robot speed.
