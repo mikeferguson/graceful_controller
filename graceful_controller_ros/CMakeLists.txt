@@ -84,6 +84,9 @@ if(BUILD_TESTING)
     tf2_ros
     visualization_msgs
   )
+  target_link_libraries(graceful_controller_tests
+    graceful_controller_ros
+  )
 
   ament_add_test(test_graceful_controller
     GENERATE_RESULT_FOR_RETURN_CODE_ZERO
