@@ -68,7 +68,11 @@ bool GracefulController::approach(const double x, const double y, const double t
   // Limit velocity based on approaching target
   double approach_limit = std::sqrt(2 * max_decel_ * r);
   v = std::min(v, approach_limit);
-  v = std::min(std::max(v, min_abs_velocity_), max_velocity_);
+  v = std::min(std::max(v, min_abs_velocity_), max_abs_velocity_);
+  if (backward_motion)
+  {
+    v *= -1; // reverse linear velocity direction for backward motion
+  }
 
   // Compute angular velocity
   double w = k * v;
