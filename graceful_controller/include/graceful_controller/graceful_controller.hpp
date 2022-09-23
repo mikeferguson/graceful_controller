@@ -60,7 +60,7 @@ public:
    * @returns true if there is a solution.
    */
   bool approach(const double x, const double y, const double theta,
-                double& vel_x, double& vel_th);
+                double& vel_x, double& vel_th, bool backward_motion=false);
 
   /**
    * @brief Update the velocity limits.
