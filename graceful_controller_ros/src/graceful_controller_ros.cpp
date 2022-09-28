@@ -243,6 +243,7 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
   min_vel_x_ = config.min_vel_x;
   max_vel_theta_ = config.max_vel_theta;
   min_in_place_vel_theta_ = config.min_in_place_vel_theta;
+  max_x_to_max_theta_scale_factor = config.max_x_to_max_theta_scale_factor;
   acc_lim_x_ = config.acc_lim_x;
   acc_lim_theta_ = config.acc_lim_theta;
   decel_lim_x_ = config.decel_lim_x;
@@ -266,6 +267,16 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
     // If decel limit not specified, use accel limit
     decel_lim_x_ = acc_lim_x_;
   }
+
+  if (max_x_to_max_theta_scale_factor_ < 0.001)
+  {
+    // If max_x_to_max_theta_scale_factor not specified, use a high value so it has no functional impact
+    max_x_to_max_theta_scale_factor_ = 100.0;
+  }
+
+  // limit maximum angular velocity proportional to maximum linear velocity
+  // so we don't make fast in-place turns in areas with low speed limits
+  max_vel_theta_limited_ = std::min(max_vel_x * max_x_to_max_theta_scale_factor, max_vel_theta_);
 
   controller_ =
       std::make_shared<GracefulController>(config.k1, config.k2, config.min_vel_x, config.max_vel_x, decel_lim_x_,
@@ -450,7 +461,7 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     do
     {
       // Configure controller max velocity
-      controller_->setVelocityLimits(min_vel_x_, sim_velocity, max_vel_theta_);
+      controller_->setVelocityLimits(min_vel_x_, sim_velocity, max_vel_theta_limited_);
       // Actually simulate our path
       if (simulate(target_pose, cmd_vel))
       {
@@ -732,7 +743,7 @@ double GracefulControllerROS::rotateTowards(const geometry_msgs::PoseStamped& po
 void GracefulControllerROS::rotateTowards(double yaw, geometry_msgs::Twist& cmd_vel)
 {
   // Determine max velocity based on current speed
-  double max_vel_th = max_vel_theta_;
+  double max_vel_th = max_vel_theta_limited_;
   if (!odom_helper_.getOdomTopic().empty())
   {
     // The API of the OdometryHelperROS uses a PoseStamped
@@ -758,7 +769,7 @@ void GracefulControllerROS::velocityCallback(const std_msgs::Float32::ConstPtr& 
   max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
   // also limit maximum angular velocity proportional to maximum linear velocity
   // so we don't make fast in-place turns in areas with low speed limits
-  max_vel_theta_ = std::min(2 * max_vel_x, max_vel_theta_);
+  max_vel_theta_limited_ = std::min(max_vel_x * max_x_to_max_theta_scale_factor, max_vel_theta_);
 }
 
 void computeDistanceAlongPath(const std::vector<geometry_msgs::PoseStamped>& poses,
