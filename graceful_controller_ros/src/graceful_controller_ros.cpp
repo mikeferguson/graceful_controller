@@ -756,6 +756,9 @@ void GracefulControllerROS::velocityCallback(const std_msgs::Float32::ConstPtr& 
   std::lock_guard<std::mutex> lock(config_mutex_);
 
   max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
+  // also limit maximum angular velocity proportional to maximum linear velocity
+  // so we don't make fast in-place turns in areas with low speed limits
+  max_vel_theta_ = std::min(2 * max_vel_x, max_vel_theta_);
 }
 
 void computeDistanceAlongPath(const std::vector<geometry_msgs::PoseStamped>& poses,
