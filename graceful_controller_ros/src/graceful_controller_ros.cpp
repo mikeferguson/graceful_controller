@@ -243,7 +243,7 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
   min_vel_x_ = config.min_vel_x;
   max_vel_theta_ = config.max_vel_theta;
   min_in_place_vel_theta_ = config.min_in_place_vel_theta;
-  max_x_to_max_theta_scale_factor = config.max_x_to_max_theta_scale_factor;
+  max_x_to_max_theta_scale_factor_ = config.max_x_to_max_theta_scale_factor;
   acc_lim_x_ = config.acc_lim_x;
   acc_lim_theta_ = config.acc_lim_theta;
   decel_lim_x_ = config.decel_lim_x;
@@ -276,7 +276,8 @@ void GracefulControllerROS::reconfigureCallback(GracefulControllerConfig& config
 
   // limit maximum angular velocity proportional to maximum linear velocity
   // so we don't make fast in-place turns in areas with low speed limits
-  max_vel_theta_limited_ = std::min(max_vel_x * max_x_to_max_theta_scale_factor, max_vel_theta_);
+  max_vel_theta_limited_ = max_vel_x_ * max_x_to_max_theta_scale_factor_;
+  max_vel_theta_limited_ = std::min(max_vel_theta_limited_, max_vel_theta_);
 
   controller_ =
       std::make_shared<GracefulController>(config.k1, config.k2, config.min_vel_x, config.max_vel_x, decel_lim_x_,
@@ -769,7 +770,8 @@ void GracefulControllerROS::velocityCallback(const std_msgs::Float32::ConstPtr& 
   max_vel_x_ = std::max(static_cast<double>(max_vel_x->data), min_vel_x_);
   // also limit maximum angular velocity proportional to maximum linear velocity
   // so we don't make fast in-place turns in areas with low speed limits
-  max_vel_theta_limited_ = std::min(max_vel_x * max_x_to_max_theta_scale_factor, max_vel_theta_);
+  max_vel_theta_limited_ = max_vel_x_ * max_x_to_max_theta_scale_factor_;
+  max_vel_theta_limited_ = std::min(max_vel_theta_limited_, max_vel_theta_);
 }
 
 void computeDistanceAlongPath(const std::vector<geometry_msgs::PoseStamped>& poses,
