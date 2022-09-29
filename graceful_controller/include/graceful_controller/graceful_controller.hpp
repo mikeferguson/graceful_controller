@@ -33,17 +33,17 @@ public:
    * @brief Constructor of the controller.
    * @param k1 Ratio of rate of change of theta to rate of change of R.
    * @param k2 How quickly we converge to the slow manifold.
-   * @param min_velocity The minimum velocity in the linear direction.
-   * @param max_velocity The maximum velocity in the linear direction.
+   * @param min_abs_velocity The minimum absolute velocity in the linear direction.
+   * @param max_abs_velocity The maximum absolute velocity in the linear direction.
    * @param max_decel The maximum deceleration in the linear direction.
-   * @param max_angular_velocity The maximum velocity in the linear direction.
+   * @param max_abs_angular_velocity The maximum absolute velocity in the angular direction.
    */
   GracefulController(double k1,
                      double k2,
-                     double min_velocity,
-                     double max_velocity,
+                     double min_abs_velocity,
+                     double max_abs_velocity,
                      double max_decel,
-                     double max_angular_velocity,
+                     double max_abs_angular_velocity,
                      double beta,
                      double lambda);
 
@@ -56,20 +56,21 @@ public:
    * @param theta The angular orientation of the goal, relative to robot base link.
    * @param vel_x The computed command velocity in the linear direction.
    * @param vel_th The computed command velocity in the angular direction.
+   * @param backward_motion Flag to indicate that the robot should move backward. False by default.
    * @returns true if there is a solution.
    */
   bool approach(const double x, const double y, const double theta,
-                double& vel_x, double& vel_th);
+                double& vel_x, double& vel_th, bool backward_motion=false);
 
   /**
    * @brief Update the velocity limits.
-   * @param min_velocity The minimum velocity in the linear direction.
-   * @param max_velocity The maximum velocity in the linear direction.
-   * @param max_angular_velocity The maximum velocity in the linear direction.
+   * @param min_abs_velocity The minimum absolute velocity in the linear direction.
+   * @param max_abs_velocity The maximum absolute velocity in the linear direction.
+   * @param max_abs_angular_velocity The maximum absolute velocity in the angular direction.
    */
-  void setVelocityLimits(const double min_velocity,
-                         const double max_velocity,
-                         const double max_angular_velocity);
+  void setVelocityLimits(const double min_abs_velocity,
+                         const double max_abs_velocity,
+                         const double max_abs_angular_velocity);
 
 private:
   /*
@@ -77,12 +78,12 @@ private:
    */
   double k1_;  // ratio in change of theta to rate of change in r
   double k2_;  // speed at which we converge to slow system
-  double min_velocity_;
-  double max_velocity_;
+  double min_abs_velocity_;
+  double max_abs_velocity_;
   double max_decel_;
-  double max_angular_velocity_;
+  double max_abs_angular_velocity_;
   double beta_;  // how fast velocity drops as k increases
-  double lambda_;  // ??
+  double lambda_; // controls speed scaling based on curvature. A higher value of lambda results in more sharply peaked curves
   double dist_;  // used to create the tracking line
 };
 
