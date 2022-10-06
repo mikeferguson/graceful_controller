@@ -144,6 +144,8 @@ private:
   double max_vel_x_;
   double min_vel_x_;
   double max_vel_theta_;
+  double max_vel_theta_limited_;
+  double max_x_to_max_theta_scale_factor_;
   double min_in_place_vel_theta_;
   double acc_lim_x_;
   double acc_lim_theta_;
