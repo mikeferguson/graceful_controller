@@ -188,6 +188,7 @@ void GracefulControllerROS::configure(
   declare_parameter_if_not_declared(node, name_ + ".min_vel_x", rclcpp::ParameterValue(0.1));
   declare_parameter_if_not_declared(node, name_ + ".max_vel_theta", rclcpp::ParameterValue(1.0));
   declare_parameter_if_not_declared(node, name_ + ".min_in_place_vel_theta", rclcpp::ParameterValue(0.4));
+  declare_parameter_if_not_declared(node, name_ + ".min_x_to_max_theta_scale_factor", rclcpp::ParameterValue(100.0));
   declare_parameter_if_not_declared(node, name_ + ".acc_lim_x", rclcpp::ParameterValue(2.5));
   declare_parameter_if_not_declared(node, name_ + ".acc_lim_theta", rclcpp::ParameterValue(3.2));
   declare_parameter_if_not_declared(node, name_ + ".acc_dt", rclcpp::ParameterValue(0.25));
@@ -214,6 +215,7 @@ void GracefulControllerROS::configure(
   node->get_parameter(name_ + ".min_vel_x", min_vel_x_);
   node->get_parameter(name_ + ".max_vel_theta", max_vel_theta_);
   node->get_parameter(name_ + ".min_in_place_vel_theta", min_in_place_vel_theta_);
+  node->get_parameter(name_ + ".max_x_to_max_theta_scale_factor", max_x_to_max_theta_scale_factor_);
   node->get_parameter(name_ + ".acc_lim_x", acc_lim_x_);
   node->get_parameter(name_ + ".acc_lim_theta", acc_lim_theta_);
   node->get_parameter(name_ + ".acc_dt", acc_dt_);
@@ -236,6 +238,10 @@ void GracefulControllerROS::configure(
   node->get_parameter(name_ + ".k2", k2);
   node->get_parameter(name_ + ".beta", beta);
   node->get_parameter(name_ + ".lambda", lambda);
+
+  // Limit maximum angular velocity proportional to maximum linear velocity
+  max_vel_theta_limited_ = max_vel_x_ * max_x_to_max_theta_scale_factor_;
+  max_vel_theta_limited_ = std::min(max_vel_theta_limited_, max_vel_theta_);
 
   // Publishers (same topics as DWA/TrajRollout)
   global_plan_pub_ = node->create_publisher<nav_msgs::msg::Path>(name_ + "/global_plan", 1);
@@ -264,7 +270,7 @@ void GracefulControllerROS::configure(
                                                      min_vel_x_,
                                                      max_vel_x_,
                                                      decel_lim_x_,
-                                                     max_vel_theta_,
+                                                     max_vel_theta_limited_,
                                                      beta,
                                                      lambda);
 
@@ -450,7 +456,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     do
     {
       // Configure controller max velocity
-      controller_->setVelocityLimits(min_vel_x_, sim_velocity, max_vel_theta_);
+      controller_->setVelocityLimits(min_vel_x_, sim_velocity, max_vel_theta_limited_);
       // Actually simulate our path
       if (simulate(target_pose, velocity, cmd_vel))
       {
@@ -468,7 +474,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   cmd_vel.twist.angular.z = 0.0;
   return cmd_vel;
 }
- 
+
 bool GracefulControllerROS::simulate(
   const geometry_msgs::msg::PoseStamped& target_pose,
   const geometry_msgs::msg::Twist& velocity,
@@ -687,7 +693,7 @@ void GracefulControllerROS::rotateTowards(
   geometry_msgs::msg::TwistStamped& cmd_vel)
 {
   // Determine max velocity based on current speed
-  double max_vel_th = max_vel_theta_;
+  double max_vel_th = max_vel_theta_limited_;
   if (acc_dt_ > 0.0)
   {
     double abs_vel = fabs(velocity.angular.z);
@@ -708,6 +714,9 @@ void GracefulControllerROS::setSpeedLimit(const double& speed_limit, const bool&
 
   // TODO: handle percentage
   max_vel_x_ = std::max(static_cast<double>(speed_limit), min_vel_x_);
+  // Limit maximum angular velocity proportional to maximum linear velocity
+  max_vel_theta_limited_ = max_vel_x_ * max_x_to_max_theta_scale_factor_;
+  max_vel_theta_limited_ = std::min(max_vel_theta_limited_, max_vel_theta_);
 }
 
 void computeDistanceAlongPath(const std::vector<geometry_msgs::msg::PoseStamped>& poses,
