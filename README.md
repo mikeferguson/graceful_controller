@@ -105,6 +105,15 @@ one or more parameters:
    so even if a pose exceeds the filter tolerance it will not be removed
    if the gap between the pose before and after it would exceed this value.
    units: meters.
+ * **max_x_to_max_theta_scale_factor** - This limits the actual maximum angular
+   velocity relative to the current maximum x velocity (which is possibly
+   changing according to the max_vel_x ROS topic). At any moment in time, the
+   maximum angular velocity is the minimum of the absolute max (max_vel_theta,
+   see below) and this parameter multiplied by the current maximum x velocity.
+   This allows enforcing slower rotation in circumstances with lower linear
+   velocity limits. This parameter's default value is high, so whne not
+   configured, angular velocity will be limited only by max_vel_theta.
+   Units: rad/m, technically.
 
 Most of the above parameters can be left to their defaults and work well
 on a majority of robots. The following parameters, however, really do
@@ -130,8 +139,8 @@ possible:
    drivetrain and casters and cannot accurately move forward at speeds below
    some threshold, especially if also trying to turn slightly at the same time.
    Units: meters/sec.
- * **max_vel_theta** - the maximum rotation velocity that will be produced by
-   the control law. Units: rad/sec.
+ * **max_vel_theta** - the absolute maximum rotation velocity that will be
+   produced by the control law. Units: rad/sec.
  * **min_in_place_vel_theta** - this is the minimum rotation velocity that
    will be used for in-place rotations. As with _min_vel_x_, this is largely
    hardware dependent since the robot has some minimum rotational velocity
