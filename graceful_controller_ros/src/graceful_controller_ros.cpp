@@ -407,9 +407,20 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
   double max_vel_x = max_vel_x_;
   if (!odom_helper_.getOdomTopic().empty())
   {
-    max_vel_x = robot_vel_x + (acc_lim_x_ * acc_dt_);
-    max_vel_x = std::min(max_vel_x, max_vel_x_);
-    max_vel_x = std::max(max_vel_x, min_vel_x_);
+    if (robot_vel_x > max_vel_x)
+    {
+      // If our velocity limit has recently changed,
+      // decelerate towards desired max_vel_x while still respecting acceleration limits
+      max_vel_x = robot_vel_x - (decel_lim_x_ * acc_dt_);
+      max_vel_x = std::max(max_vel_x, min_vel_x_);
+    }
+    else
+    {
+      // Otherwise, allow up to max acceleration
+      max_vel_x = robot_vel_x + (acc_lim_x_ * acc_dt_);
+      max_vel_x = std::min(max_vel_x, max_vel_x_);
+      max_vel_x = std::max(max_vel_x, min_vel_x_);
+    }
   }
 
   // Compute distance along path
