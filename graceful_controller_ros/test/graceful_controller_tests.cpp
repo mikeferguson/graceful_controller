@@ -296,16 +296,17 @@ TEST(ControllerTests, test_basic_plan)
   EXPECT_EQ(command.linear.x, 0.25);
   EXPECT_EQ(command.angular.z, 0.0);
 
-  // Now lie about velocity
+  // Set current velocity above the velocity limit
   fixture.setSimVelocity(1.0, 0.0);
   ros::Duration(0.25).sleep();
 
-  // Odom now reports 1.0, but max_vel_x topic is 0.5
+  // Odom now reports 1.0, but max_vel_x topic is 0.5 - will deccelerate down to 0.5
   EXPECT_TRUE(controller->computeVelocityCommands(command));
-  EXPECT_EQ(command.linear.x, 0.5);
+  EXPECT_EQ(command.linear.x, 0.875);
   EXPECT_EQ(command.angular.z, 0.0);
 
-  // Bump our current speed up
+  // Bump up our limit and speed
+  fixture.setSimVelocity(1.0, 0.0);
   fixture.setMaxVelocity(1.0);
   ros::Duration(0.25).sleep();
 
