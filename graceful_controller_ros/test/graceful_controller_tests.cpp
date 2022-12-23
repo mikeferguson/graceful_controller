@@ -2,7 +2,7 @@
  *
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2021-2022, Michael Ferguson
+ *  Copyright (c) 2021-2023, Michael Ferguson
  *  Copyright (c) 2009, Willow Garage, Inc.
  *  All rights reserved.
  *
@@ -354,16 +354,16 @@ TEST(ControllerTests, test_basic_plan)
   EXPECT_EQ(command.twist.linear.x, 0.25);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 
-  // Now lie about velocity
+  // Set current velocity above the velocity limit
   fixture->setSimVelocity(1.0, 0.0);
   robot_velocity = fixture->getRobotVelocity();
 
-  // Odom now reports 1.0, but max_vel_x topic is 0.5
+  // Odom now reports 1.0, but max_vel_x topic is 0.5 - will deccelerate down to 0.5
   command = controller->computeVelocityCommands(robot_pose, robot_velocity, &goal_checker);
-  EXPECT_EQ(command.twist.linear.x, 0.5);
+  EXPECT_EQ(command.twist.linear.x, 0.875);
   EXPECT_EQ(command.twist.angular.z, 0.0);
 
-  // Bump our current speed up
+  // Bump up our limit and speed
   fixture->setMaxVelocity(1.0);
   robot_velocity = fixture->getRobotVelocity();
 

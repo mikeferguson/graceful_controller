@@ -2,7 +2,7 @@
  *
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2021-2022, Michael Ferguson
+ *  Copyright (c) 2021-2023, Michael Ferguson
  *  Copyright (c) 2009, Willow Garage, Inc.
  *  All rights reserved.
  *
@@ -409,8 +409,20 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   }
 
   // Get controller max velocity based on current speed
-  double max_vel_x = velocity.linear.x + (acc_lim_x_ * acc_dt_);
-  max_vel_x = std::max(min_vel_x_, std::min(max_vel_x, max_vel_x_));
+  double max_vel_x = max_vel_x_;
+  if (velocity.linear.x > max_vel_x)
+  {
+    // If our velocity limit has recently changed,
+    // decelerate towards desired max_vel_x while still respecting acceleration limits
+    max_vel_x = velocity.linear.x - (decel_lim_x_ * acc_dt_);
+    max_vel_x = std::max(max_vel_x, min_vel_x_);
+  }
+  else
+  {
+    // Otherwise, allow up to max acceleration
+    max_vel_x = velocity.linear.x + (acc_lim_x_ * acc_dt_);
+    max_vel_x = std::max(min_vel_x_, std::min(max_vel_x, max_vel_x_));
+  }
 
   // Compute distance along path
   std::vector<geometry_msgs::msg::PoseStamped> target_poses;
