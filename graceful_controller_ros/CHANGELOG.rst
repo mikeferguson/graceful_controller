@@ -2,6 +2,13 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* follow acceleration limits when velocity limit changes (`#62 <https://github.com/mikeferguson/graceful_controller/issues/62>`_)
+* add angular velocity limiting control (`#61 <https://github.com/mikeferguson/graceful_controller/issues/61>`_)
+  Adds max_x_to_max_theta_scale_factor which can be used to control how the angular velocity changes relative to the linear velocity when use_vel_topic feature is enabled.
+* Contributors: Michael Ferguson, TrazCobalt
+
 0.4.5 (2022-08-24)
 ------------------
 * compute lookahead as distance along path (`#55 <https://github.com/mikeferguson/graceful_controller/issues/55>`_)

@@ -2,6 +2,11 @@
 Changelog for package graceful_controller
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Added flag for backward motion and renamed limit params (`#60 <https://github.com/mikeferguson/graceful_controller/issues/60>`_)
+* Contributors: mkaca
+
 0.4.5 (2022-08-24)
 ------------------
 
