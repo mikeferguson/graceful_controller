@@ -30,30 +30,30 @@ namespace graceful_controller
 {
 
 GracefulController::GracefulController(double k1, double k2,
-                                       double min_velocity, double max_velocity,
+                                       double min_abs_velocity, double max_abs_velocity,
                                        double max_decel,
-                                       double max_angular_velocity,
+                                       double max_abs_angular_velocity,
                                        double beta, double lambda)
 {
   k1_ = k1;
   k2_ = k2;
-  min_velocity_ = min_velocity;
-  max_velocity_ = max_velocity;
+  min_abs_velocity_ = min_abs_velocity;
+  max_abs_velocity_ = max_abs_velocity;
   max_decel_ = max_decel;
-  max_angular_velocity_ = max_angular_velocity;
+  max_abs_angular_velocity_ = max_abs_angular_velocity;
   beta_ = beta;
   lambda_ = lambda;
 }
 
 // x, y, theta are relative to base location and orientation
 bool GracefulController::approach(const double x, const double y, const double theta,
-                                  double& vel_x, double& vel_th)
+                                  double& vel_x, double& vel_th, bool backward_motion)
 {
   // Distance to goal
   double r = std::sqrt(x * x + y * y);
 
   // Orientation base frame relative to r_
-  double delta = std::atan2(-y, x);
+  double delta = (backward_motion) ? std::atan2(-y, -x) : std::atan2(-y, x);
 
   // Determine orientation of goal frame relative to r_
   double theta2 = angles::normalize_angle(theta + delta);
@@ -64,16 +64,20 @@ bool GracefulController::approach(const double x, const double y, const double t
   double k = -1.0/r * (k2_ * (delta - a) + (1 + (k1_/(1+((k1_*theta2)*(k1_*theta2)))))*sin(delta));
 
   // Compute max_velocity based on curvature
-  double v = max_velocity_ / (1 + beta_ * std::pow(fabs(k), lambda_));
+  double v = max_abs_velocity_ / (1 + beta_ * std::pow(fabs(k), lambda_));
   // Limit velocity based on approaching target
   double approach_limit = std::sqrt(2 * max_decel_ * r);
   v = std::min(v, approach_limit);
-  v = std::min(std::max(v, min_velocity_), max_velocity_);
+  v = std::min(std::max(v, min_abs_velocity_), max_abs_velocity_);
+  if (backward_motion)
+  {
+    v *= -1; // reverse linear velocity direction for backward motion
+  }
 
   // Compute angular velocity
   double w = k * v;
   // Bound angular velocity
-  double bounded_w = std::min(max_angular_velocity_, std::max(-max_angular_velocity_, w));
+  double bounded_w = std::min(max_abs_angular_velocity_, std::max(-max_abs_angular_velocity_, w));
   // Make sure that if we reduce w, we reduce v so that kurvature is still followed
   if (w != 0.0)
   {
@@ -87,13 +91,13 @@ bool GracefulController::approach(const double x, const double y, const double t
 }
 
 void GracefulController::setVelocityLimits(
-  const double min_velocity,
-  const double max_velocity,
-  const double max_angular_velocity)
+  const double min_abs_velocity,
+  const double max_abs_velocity,
+  const double max_abs_angular_velocity)
 {
-  min_velocity_ = min_velocity;
-  max_velocity_ = max_velocity;
-  max_angular_velocity_ = max_angular_velocity;
+  min_abs_velocity_ = min_abs_velocity;
+  max_abs_velocity_ = max_abs_velocity;
+  max_abs_angular_velocity_ = max_abs_angular_velocity;
 }
 
 }  // namespace graceful_controller
