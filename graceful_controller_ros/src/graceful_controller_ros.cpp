@@ -239,6 +239,9 @@ void GracefulControllerROS::configure(
   node->get_parameter(name_ + ".beta", beta);
   node->get_parameter(name_ + ".lambda", lambda);
 
+  // Set initial velocity limit
+  max_vel_x_limited_ = max_vel_x_;
+
   if (max_x_to_max_theta_scale_factor_ < 0.001)
   {
     // If max_x_to_max_theta_scale_factor not specified, use a high value so it has no functional impact
@@ -246,7 +249,7 @@ void GracefulControllerROS::configure(
   }
 
   // Limit maximum angular velocity proportional to maximum linear velocity
-  max_vel_theta_limited_ = max_vel_x_ * max_x_to_max_theta_scale_factor_;
+  max_vel_theta_limited_ = max_vel_x_limited_ * max_x_to_max_theta_scale_factor_;
   max_vel_theta_limited_ = std::min(max_vel_theta_limited_, max_vel_theta_);
 
   // Publishers (same topics as DWA/TrajRollout)
@@ -409,7 +412,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   }
 
   // Get controller max velocity based on current speed
-  double max_vel_x = max_vel_x_;
+  double max_vel_x = max_vel_x_limited_;
   if (velocity.linear.x > max_vel_x)
   {
     // If our velocity limit has recently changed,
@@ -421,7 +424,7 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   {
     // Otherwise, allow up to max acceleration
     max_vel_x = velocity.linear.x + (acc_lim_x_ * acc_dt_);
-    max_vel_x = std::max(min_vel_x_, std::min(max_vel_x, max_vel_x_));
+    max_vel_x = std::max(min_vel_x_, std::min(max_vel_x, max_vel_x_limited_));
   }
 
   // Compute distance along path
@@ -610,7 +613,7 @@ bool GracefulControllerROS::simulate(
     {
       // Scaling = (vel_x - scaling_vel_x) / (max_vel_x - scaling_vel_x)
       // NOTE: max_vel_x_ is possibly changing from ROS topic
-      double ratio = max_vel_x_ - scaling_vel_x_;
+      double ratio = max_vel_x_limited_ - scaling_vel_x_;
       // Avoid divide by zero
       if (ratio > 0)
       {
@@ -730,10 +733,16 @@ void GracefulControllerROS::setSpeedLimit(const double& speed_limit, const bool&
   // Lock the mutex
   std::lock_guard<std::mutex> lock(config_mutex_);
 
-  // TODO: handle percentage
-  max_vel_x_ = std::max(static_cast<double>(speed_limit), min_vel_x_);
+  if (percentage)
+  {
+    max_vel_x_limited_ = std::max(speed_limit * max_vel_x_, min_vel_x_);
+  }
+  else
+  {
+    max_vel_x_limited_ = std::max(speed_limit, min_vel_x_);
+  }
   // Limit maximum angular velocity proportional to maximum linear velocity
-  max_vel_theta_limited_ = max_vel_x_ * max_x_to_max_theta_scale_factor_;
+  max_vel_theta_limited_ = max_vel_x_limited_ * max_x_to_max_theta_scale_factor_;
   max_vel_theta_limited_ = std::min(max_vel_theta_limited_, max_vel_theta_);
 }
 

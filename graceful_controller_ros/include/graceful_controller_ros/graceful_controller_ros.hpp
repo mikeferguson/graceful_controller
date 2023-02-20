@@ -2,7 +2,7 @@
  *
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2021-2022, Michael Ferguson
+ *  Copyright (c) 2021-2023, Michael Ferguson
  *  Copyright (c) 2009, Willow Garage, Inc.
  *  All rights reserved.
  *
@@ -158,7 +158,7 @@ private:
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> local_plan_pub_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseStamped>> target_pose_pub_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<visualization_msgs::msg::MarkerArray>> collision_points_pub_;
-  
+
   bool initialized_;
   GracefulControllerPtr controller_;
 
@@ -170,6 +170,7 @@ private:
   // Parameters
   std::mutex config_mutex_;
   double max_vel_x_;
+  double max_vel_x_limited_;
   double min_vel_x_;
   double max_vel_theta_;
   double max_vel_theta_limited_;
