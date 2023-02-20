@@ -239,6 +239,12 @@ void GracefulControllerROS::configure(
   node->get_parameter(name_ + ".beta", beta);
   node->get_parameter(name_ + ".lambda", lambda);
 
+  if (max_x_to_max_theta_scale_factor_ < 0.001)
+  {
+    // If max_x_to_max_theta_scale_factor not specified, use a high value so it has no functional impact
+    max_x_to_max_theta_scale_factor_ = 100.0;
+  }
+
   // Limit maximum angular velocity proportional to maximum linear velocity
   max_vel_theta_limited_ = max_vel_x_ * max_x_to_max_theta_scale_factor_;
   max_vel_theta_limited_ = std::min(max_vel_theta_limited_, max_vel_theta_);
@@ -270,7 +276,7 @@ void GracefulControllerROS::configure(
                                                      min_vel_x_,
                                                      max_vel_x_,
                                                      decel_lim_x_,
-                                                     max_vel_theta_limited_,
+                                                     max_vel_theta_,
                                                      beta,
                                                      lambda);
 
