@@ -2,7 +2,7 @@
  *
  * Software License Agreement (BSD License)
  *
- *  Copyright (c) 2021-2022, Michael Ferguson
+ *  Copyright (c) 2021-2023, Michael Ferguson
  *  Copyright (c) 2009, Willow Garage, Inc.
  *  All rights reserved.
  *
@@ -384,23 +384,32 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
     size_t num_steps = fabs(yaw_end - yaw_start) / 0.1;
     // Need to check at least the end pose
     if (num_steps < 1)
+    {
       num_steps = 1;
+    }
+    // If we fail to generate an in place rotation, maybe we need to move along path a bit more
+    bool collision_free = true;
     for (size_t i = 1; i <= num_steps; ++i)
     {
       double step = static_cast<double>(i) / static_cast<double>(num_steps);
       double yaw = yaw_start + (step * (yaw_start - yaw_end));
       if (isColliding(robot_pose_.pose.position.x, robot_pose_.pose.position.y, yaw, costmap_ros_, collision_points_))
       {
-        ROS_ERROR("Unable to rotate in place due to collision.");
+        ROS_WARN("Unable to rotate in place due to collision.");
         if (collision_points_)
         {
           collision_point_pub_.publish(*collision_points_);
         }
-        return false;
+        collision_free = false;
+        break;
       }
     }
-    // Safe to rotate, execute computed command
-    return true;
+    if (collision_free)
+    {
+      // Safe to rotate, execute computed command
+      return true;
+    }
+    // Otherwise, fall through and try to get closer to goal in XY
   }
 
   // Get controller max velocity based on current speed
