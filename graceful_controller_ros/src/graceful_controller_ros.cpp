@@ -390,6 +390,8 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
     size_t num_steps = fabs(yaw_delta) / 0.1;
     // Need to check at least the end pose
     num_steps = std::max(static_cast<size_t>(1), num_steps);
+    // If we fail to generate an in place rotation, maybe we need to move along path a bit more
+    bool collision_free = true;
     for (size_t i = 1; i <= num_steps; ++i)
     {
       double step = static_cast<double>(i) / static_cast<double>(num_steps);
@@ -404,11 +406,16 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
         }
         // Reset to zero velocity
         cmd_vel.twist = geometry_msgs::msg::Twist();
-        return cmd_vel;
+        collision_free = false;
+        break;
       }
     }
-    // Safe to rotate, execute computed command
-    return cmd_vel;
+    if (collision_free)
+    {
+      // Safe to rotate, execute computed command
+      return cmd_vel;
+    }
+    // Otherwise, fall through and try to get closer to goal in XY
   }
 
   // Get controller max velocity based on current speed
