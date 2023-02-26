@@ -2,6 +2,11 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* generate linear movements if final in-place rotation is infeasible (`#67 <https://github.com/mikeferguson/graceful_controller/issues/67>`_)
+* Contributors: Michael Ferguson
+
 0.4.6 (2023-02-20)
 ------------------
 * follow acceleration limits when velocity limit changes (`#62 <https://github.com/mikeferguson/graceful_controller/issues/62>`_)
