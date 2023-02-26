@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.7 (2023-02-26)
+------------------
 * generate linear movements if final in-place rotation is infeasible (`#67 <https://github.com/mikeferguson/graceful_controller/issues/67>`_)
 * Contributors: Michael Ferguson
 
