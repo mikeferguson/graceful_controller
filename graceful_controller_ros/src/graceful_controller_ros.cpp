@@ -421,11 +421,7 @@ bool GracefulControllerROS::computeVelocityCommands(geometry_msgs::Twist& cmd_ve
       // If our velocity limit has recently changed,
       // decelerate towards desired max_vel_x while still respecting acceleration limits
       double decelerating_max_vel_x = robot_vel_x - (decel_lim_x_ * acc_dt_);
-      if (decelerating_max_vel_x > max_vel_x)
-      {
-        // Don't reduce max_vel_x below the desired limit
-        max_vel_x = decelerating_max_vel_x;
-      }
+      max_vel_x = std::max(max_vel_x, decelerating_max_vel_x);
       max_vel_x = std::max(max_vel_x, min_vel_x_);
     }
     else
