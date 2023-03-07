@@ -2,8 +2,8 @@
 Changelog for package graceful_controller_ros
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.4.8 (2023-03-06)
+------------------
 * fix stutter when robot velocity exceeds max_vel_x (`#69 <https://github.com/mikeferguson/graceful_controller/issues/69>`_)
   a bit of noise on the odometry can cause the robot to overshoot
   the max_vel_x - this would then cause us to decelerate - possibly
