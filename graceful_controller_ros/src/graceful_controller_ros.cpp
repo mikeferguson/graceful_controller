@@ -378,8 +378,17 @@ geometry_msgs::msg::TwistStamped GracefulControllerROS::computeVelocityCommands(
   // Compute distance to goal
   double dist_to_goal = std::hypot(goal_pose.pose.position.x, goal_pose.pose.position.y);
 
+  // Compute distance to stopped
+  bool below_velocity_limits = true;
+  if (fabs(velocity.linear.x) > velocity_tolerance.linear.x ||
+      fabs(velocity.angular.z) > velocity_tolerance.angular.z)
+  {
+    // Not sufficiently stopped
+    below_velocity_limits = false;
+  }
+
   // If we've reached the XY goal tolerance, just rotate
-  if (dist_to_goal < pose_tolerance.position.x || goal_tolerance_met_)
+  if ((dist_to_goal < pose_tolerance.position.x && below_velocity_limits) || goal_tolerance_met_)
   {
     // Reached goal, latch if desired
     goal_tolerance_met_ = latch_xy_goal_tolerance_;
