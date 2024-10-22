@@ -11,6 +11,10 @@ which is both A) less than some maximum lookahead distance away, and B)
 reachable (without collision) using our control law (as determined by
 a forward simulation). We call this the **target_pose**.
 
+There is a more detailed write up of the motiviation behind creating
+yet another local controller on
+[my blog](http://www.robotandchisel.com/2024/10/14/graceful-controller/)
+
 ## ROS2 Topics
 
 As with nearly all navigation local controllers, our controller outputs
